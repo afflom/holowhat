@@ -118,6 +118,7 @@ replacements = [
     (re.compile(r"\"/pkg/"), "\"pkg/"),
     (re.compile(r"'\''/pkg/"), "'\''pkg/"),
     (re.compile(r"\.\./\.\./\.\./pkg/"), "../../pkg/"),
+    (re.compile(r"\{\{\s*AUTOMERGE_ID\s*\}\}"), "2RsvqRvmUqCmxPhEbdXtwW4qsdFm"),
 ]
 
 for root, dirs, files in os.walk(stage_dir):

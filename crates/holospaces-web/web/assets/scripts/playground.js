@@ -309,7 +309,7 @@ await bootstrapPresets();
 
 // Determine Document ID to load
 let docUrl = new URLSearchParams(location.search).get("id") || window.AUTOMERGE_ID || location.pathname.split("/").pop();
-if (docUrl === "2RsvqRvmUqCmxPhEbdXtwW4qsdFm" || !docUrl || docUrl === "worlds" || docUrl === "login.html" || docUrl === "worlds.html") {
+if (docUrl === "2RsvqRvmUqCmxPhEbdXtwW4qsdFm" || !docUrl || docUrl === "{{ AUTOMERGE_ID }}" || docUrl === "worlds" || docUrl === "login.html" || docUrl === "worlds.html") {
   const localDefault = localStorage.getItem("hs-world:default");
   docUrl = localDefault || "2RsvqRvmUqCmxPhEbdXtwW4qsdFm";
 }
