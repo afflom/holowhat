@@ -122,14 +122,16 @@
           const jwkObj = JSON.parse(savedJwk);
           this.participant = await Participant.importJwk(jwkObj);
           console.log("Restored shell-block identity:", this.participant.id);
+          await this.onIdentityReady();
         } catch (e) {
           console.error("Failed to restore shell-block identity:", e);
         }
       }
-      
-      const mockManifest = await createMessengerApp(this.participant || await Participant.create());
-      this.indexApps = [mockManifest];
+    },
 
+    async onIdentityReady() {
+      const mockManifest = await createMessengerApp(this.participant);
+      this.indexApps = [mockManifest];
       this.installedAppIds = JSON.parse(localStorage.getItem("holoapps_installed_apps") || "[]");
       await this.loadChannels();
     },
@@ -142,9 +144,7 @@
       localStorage.setItem("holoapps_identity_key", p.id);
       localStorage.setItem("holoapps_curve_key", p.curveId);
       
-      // Update app index list with new participant mapping
-      const mockManifest = await createMessengerApp(p);
-      this.indexApps = [mockManifest];
+      await this.onIdentityReady();
     },
 
     async importKeys() {
@@ -158,9 +158,7 @@
         localStorage.setItem("holoapps_curve_key", p.curveId);
         this.importInput = "";
         
-        // Update app index list with new participant mapping
-        const mockManifest = await createMessengerApp(p);
-        this.indexApps = [mockManifest];
+        await this.onIdentityReady();
         
         alert("Identity imported successfully!");
       } catch (e) {
