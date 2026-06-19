@@ -1,0 +1,457 @@
+<div class="msg-wrapper" x-data="messengerBlock">
+  <!-- Messages List -->
+  <div class="messages-list" id="chat-scroller">
+    <template x-for="msg in view.messages" :key="msg.id">
+      <div class="message" :class="{ 'mine': msg.author === identity }">
+        <div class="meta">
+          <span class="author" x-text="msg.author === identity ? 'You' : msg.author.substring(0, 8)"></span>
+          <span class="time" x-text="new Date(msg.timestamp).toLocaleTimeString()"></span>
+          <template x-if="msg.edits.length > 0">
+            <span class="edited">(edited)</span>
+          </template>
+        </div>
+        <div class="body" x-text="msg.body"></div>
+
+        <!-- Reactions -->
+        <div class="reactions" x-show="msg.reactions.length > 0">
+          <template x-for="r in msg.reactions" :key="r.symbol">
+            <span class="badge" :class="{ 'active': r.authors.includes(identity) }" @click="toggleReact(msg, r.symbol)" x-text="r.symbol + ' ' + r.count"></span>
+          </template>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+          <button @click="toggleReact(msg, '👍')">👍</button>
+          <button @click="toggleReact(msg, '❤️')">❤️</button>
+          <template x-if="msg.author === identity">
+            <button @click="startEdit(msg)">Edit</button>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Input Area -->
+  <div class="input-bar">
+    <input type="text" class="chat-input" placeholder="Send a message..." x-model="text" @keydown.enter="send()" />
+    <button class="send-btn" @click="send()">Send</button>
+    <button class="send-btn" style="background: #475569;" @click="invite()">Invite</button>
+  </div>
+
+  <!-- Edit Modal -->
+  <template x-if="editing">
+    <div class="edit-overlay">
+      <div class="edit-dialog">
+        <h4>Edit Message</h4>
+        <input type="text" class="chat-input" x-model="editText" />
+        <div class="edit-buttons">
+          <button class="send-btn" @click="saveEdit()">Save</button>
+          <button class="send-btn cancel" @click="editing = null">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script type="module">
+  import { Event, canonicalJson, sha256 } from "assets/scripts/holo-apps.js";
+
+  export default {
+    mixins: [],
+    props: {
+      channelId: String
+    },
+    identity: "",
+    view: { messages: [] },
+    text: "",
+    editing: null,
+    editText: "",
+
+    async init() {
+      this.identity = localStorage.getItem("holoapps_identity_key") || "";
+      await this.refresh();
+      
+      this._pollInterval = setInterval(async () => {
+        await this.refresh();
+      }, 1000);
+    },
+
+    destroy() {
+      clearInterval(this._pollInterval);
+    },
+
+    getCollection() {
+      // Find collection inside the shell block active channels
+      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const ch = shell.channels.find(c => c.id === this.channelId);
+      return ch ? ch.collection : null;
+    },
+
+    async refresh() {
+      const col = this.getCollection();
+      if (col) {
+        this.view = await col.render();
+      }
+    },
+
+    async send() {
+      if (!this.text) return;
+      const col = this.getCollection();
+      if (!col) return;
+
+      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const p = shell.participant;
+      const parents = Array.from(col.heads);
+      
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const ev = await Event.create({
+        kind: "message",
+        author: p.id,
+        collectionId: col.id,
+        parents,
+        clock: maxClock + 1,
+        payload: { body: this.text, timestamp: Date.now() }
+      }, p);
+
+      const added = await col.addEvent(ev);
+      if (added) {
+        shell.saveEvent(ev);
+        this.text = "";
+        await this.refresh();
+
+        this.$nextTick(() => {
+          const scroller = this.$el.querySelector("#chat-scroller");
+          if (scroller) scroller.scrollTop = scroller.scrollHeight;
+        });
+      }
+    },
+
+    async toggleReact(msg, symbol) {
+      const col = this.getCollection();
+      if (!col) return;
+
+      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const p = shell.participant;
+      const parents = Array.from(col.heads);
+      
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const ev = await Event.create({
+        kind: "reaction",
+        author: p.id,
+        collectionId: col.id,
+        parents,
+        clock: maxClock + 1,
+        payload: { target: msg.id, symbol }
+      }, p);
+
+      const added = await col.addEvent(ev);
+      if (added) {
+        shell.saveEvent(ev);
+        await this.refresh();
+      }
+    },
+
+    startEdit(msg) {
+      this.editing = msg;
+      this.editText = msg.body;
+    },
+
+    async saveEdit() {
+      if (!this.editing) return;
+      const col = this.getCollection();
+      if (!col) return;
+
+      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const p = shell.participant;
+      const parents = Array.from(col.heads);
+      
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const ev = await Event.create({
+        kind: "edit",
+        author: p.id,
+        collectionId: col.id,
+        parents,
+        clock: maxClock + 1,
+        payload: { target: this.editing.id, body: this.editText }
+      }, p);
+
+      const added = await col.addEvent(ev);
+      if (added) {
+        shell.saveEvent(ev);
+        await this.refresh();
+        this.editing = null;
+      }
+    },
+
+    async invite() {
+      const targetId = prompt("Enter Invitee's Identity Address (κ):");
+      if (!targetId) return;
+      const targetCurveId = prompt("Enter Invitee's ECDH Public Exchange Key:");
+      if (!targetCurveId) return;
+
+      const col = this.getCollection();
+      if (!col) return;
+
+      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const p = shell.participant;
+
+      // 1. Author a membership grant event
+      const parents = Array.from(col.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const grantEvent = await Event.create({
+        kind: "membership",
+        author: p.id,
+        collectionId: col.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          target: targetId,
+          action: "grant",
+          capabilities: ["read", "write"],
+          curveId: targetCurveId
+        }
+      }, p);
+
+      const grantAdded = await col.addEvent(grantEvent);
+      if (!grantAdded) {
+        alert("Failed to grant membership. Are you an admin of this channel?");
+        return;
+      }
+      shell.saveEvent(grantEvent);
+
+      // 2. Generate and wrap a new/existing epoch key
+      let epochKey = col.epochKeys.get(col.currentEpochId);
+      if (!epochKey) {
+        epochKey = await HoloAppsCrypto.generateEpochKey();
+      }
+
+      // Wrap for both target and self (for forward access)
+      const myWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, p.curveId);
+      const targetWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, targetCurveId);
+
+      const epochParents = Array.from(col.heads);
+      let epochMaxClock = 0;
+      for (const pId of epochParents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > epochMaxClock) epochMaxClock = parent.header.clock;
+      }
+
+      const epochEvent = await Event.create({
+        kind: "epoch",
+        author: p.id,
+        collectionId: col.id,
+        parents: epochParents,
+        clock: epochMaxClock + 1,
+        payload: {
+          senderCurveId: p.curveId,
+          wrappedKeys: {
+            [p.id]: myWrappedKey,
+            [targetId]: targetWrappedKey
+          }
+        }
+      }, p);
+
+      const epochAdded = await col.addEvent(epochEvent);
+      if (!epochAdded) {
+        alert("Failed to add epoch key rotation event.");
+        return;
+      }
+      shell.saveEvent(epochEvent);
+      col.epochKeys.set(epochEvent.id, epochKey);
+      col.currentEpochId = epochEvent.id;
+
+      // 3. Serialize invite payload
+      const allEvents = Array.from(col.events.values()).map(ev => ({
+        header: ev.header,
+        body: ev.body,
+        signature: ev.signature,
+        id: ev.id
+      }));
+
+      const genesisEvent = allEvents.find(e => e.header.kind === "genesis");
+      const ch = shell.channels.find(c => c.id === col.id);
+      const channelName = ch ? ch.name : "Joined Channel";
+
+      const inviteObj = {
+        id: col.id,
+        name: channelName,
+        genesisEvent,
+        events: allEvents.filter(e => e.header.kind !== "genesis")
+      };
+
+      const serialized = btoa(JSON.stringify(inviteObj));
+      prompt("Share this Invite Code with the invitee:", serialized);
+    }
+  }
+</script>
+
+<style>
+  .msg-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: #1e293b;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    padding: 16px;
+    overflow: hidden;
+    position: relative;
+  }
+  .messages-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .message {
+    padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 8px;
+    max-width: 80%;
+    align-self: flex-start;
+    position: relative;
+  }
+  .message.mine {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+    align-self: flex-end;
+  }
+  .meta {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-bottom: 4px;
+    display: flex;
+    gap: 8px;
+  }
+  .author {
+    font-weight: 700;
+    color: #818cf8;
+  }
+  .message.mine .author {
+    color: #a5b4fc;
+  }
+  .edited {
+    font-style: italic;
+    color: #475569;
+  }
+  .body {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+  .actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .message:hover .actions {
+    opacity: 1;
+  }
+  .actions button {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .actions button:hover {
+    color: white;
+  }
+  .reactions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .badge {
+    background: rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .badge.active {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: #6366f1;
+  }
+  .input-bar {
+    display: flex;
+    gap: 8px;
+  }
+  .chat-input {
+    background: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    flex-grow: 1;
+  }
+  .chat-input:focus {
+    outline: none;
+    border-color: #6366f1;
+  }
+  .send-btn {
+    background: #6366f1;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .edit-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .edit-dialog {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    max-width: 320px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .edit-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .cancel {
+    background: #475569;
+  }
+</style>

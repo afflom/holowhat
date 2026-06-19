@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Holo-Apps Shell</title>
+    <link href="assets/css/reset.css" rel="stylesheet" />
+    <link href="assets/css/apps.css" rel="stylesheet" />
+    <link rel="icon" href="assets/img/favicon.svg" sizes="any" type="image/svg+xml" />
+    
+    <script type="module" src="assets/scripts/holo-apps.js"></script>
+    <script type="module" src="assets/scripts/holo-messenger.js"></script>
+    <script type="module" src="assets/scripts/apps.js"></script>
+  </head>
+  <body x-data="shell">
+    
+    <!-- Sign-In / Identity Verification Overlay -->
+    <template x-if="!participant">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Select Cryptographic Identity</h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
+            Holo-apps runs coordinator-free (Part 1). Authorship and authority are defined by self-sovereign keys.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <button class="btn" @click="createNewIdentity()">
+              Generate New Identity Keypair
+            </button>
+            <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">or load existing</div>
+            <input type="text" class="input" placeholder="Paste Backup Payload (Base64)" x-model="privateKeyHexInput" />
+            <button class="btn btn-secondary" @click="loadExistingIdentity()" :disabled="!privateKeyHexInput">
+              Import Identity
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Main Shell App View -->
+    <template x-if="participant">
+      <div class="shell-container">
+        
+        <!-- Sidebar Navigation -->
+        <div class="sidebar">
+          <div class="sidebar-header">
+            <div class="logo-glow"></div>
+            <img class="logo-img" src="assets/img/favicon.svg" />
+            <div class="sidebar-title">Holo-Apps Shell</div>
+          </div>
+          
+          <div class="sidebar-section">
+            <!-- App Navigation -->
+            <div class="section-label">Navigation</div>
+            <ul class="sidebar-list">
+              <li class="sidebar-item" :class="{ 'active': activeTab === 'dashboard' }" @click="selectTab('dashboard')">
+                <span>Workspace Dashboard</span>
+              </li>
+              <li class="sidebar-item" :class="{ 'active': activeTab === 'apps' }" @click="selectTab('apps')">
+                <span>Index App Store</span>
+              </li>
+            </ul>
+
+            <!-- Active Channels (Collections) -->
+            <div class="section-label">Active Channels</div>
+            <ul class="sidebar-list">
+              <template x-for="ch in channels" :key="ch.id">
+                <li class="sidebar-item" :class="{ 'active': activeTab === 'channel' && activeChannel?.id === ch.id }" @click="selectChannel(ch)">
+                  <span x-text="ch.name">Channel Name</span>
+                  <span class="sidebar-item-meta" x-text="ch.id.substring(0, 6)">ID</span>
+                </li>
+              </template>
+            </ul>
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 8px;">
+              <button class="btn btn-secondary" @click="showCreateChannelModal = true" style="font-size: 0.8rem; padding: 8px 12px;">
+                + Create Channel
+              </button>
+              <button class="btn btn-secondary" @click="showJoinChannelModal = true" style="font-size: 0.8rem; padding: 8px 12px;">
+                → Join Channel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Display Panel -->
+        <div class="main-content">
+          <div class="top-bar">
+            <div>
+              <h2 style="font-size: 1.2rem; font-weight: 600;" x-text="topBarTitle">Workspace</h2>
+            </div>
+            
+            <div class="user-badge" @click="showIdentityDetails = true">
+              <div class="status-dot"></div>
+              <span class="pubkey-abbr" x-text="'Operator: ' + participant.id.substring(0, 12) + '...'">Address</span>
+            </div>
+          </div>
+
+          <div class="content-pane">
+            
+            <!-- Dashboard Tab -->
+            <template x-if="activeTab === 'dashboard'">
+              <div style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
+                <div class="glass" style="padding: 24px;">
+                  <h3 style="margin-bottom: 12px; font-weight: 600;">Sovereign Cryptographic Profile</h3>
+                  <div style="display: flex; flex-direction: column; gap: 12px; font-family: 'Source Code Pro', monospace; font-size: 0.85rem;">
+                    <div>
+                      <span style="color: var(--text-muted);">Identity Address (κ):</span>
+                      <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; border: 1px solid var(--border); overflow-x: auto; word-break: break-all;" x-text="participant.id"></div>
+                    </div>
+                    <div>
+                      <span style="color: var(--text-muted);">ECDH Public Exchange Key:</span>
+                      <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; border: 1px solid var(--border); overflow-x: auto; word-break: break-all;" x-text="participant.curveId"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="glass" style="padding: 24px;">
+                  <h3 style="margin-bottom: 12px; font-weight: 600;">Substrate Peer Status</h3>
+                  <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 16px;">
+                    Your browser peer executes standard verify-on-receipt (Law L5) and propagates updates via WebRTC data channel mesh links. No coordinator can censor or alter state.
+                  </p>
+                  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div style="padding: 10px 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; font-size: 0.85rem; color: var(--success);">
+                      Substrate Connection: Active
+                    </div>
+                    <div style="padding: 10px 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; color: var(--text-secondary);">
+                      Active Sync Swarms: <span x-text="channels.length">0</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- App Store / Index Tab -->
+            <template x-if="activeTab === 'apps'">
+              <div>
+                <h3 style="font-weight: 600; margin-bottom: 16px;">Gateway App Index</h3>
+                <div class="apps-grid">
+                  <template x-for="app in indexApps" :key="app.id">
+                    <div class="app-card glass">
+                      <div class="app-card-title" x-text="app.name">App Name</div>
+                      <div class="app-card-desc">
+                        A coordination-free client-side chat app. All messages are encrypted under rotated epoch keys and verified cryptographically on receipt.
+                      </div>
+                      <div class="app-card-meta">
+                        Manifest κ: <span x-text="app.id.substring(0, 16) + '...'"></span>
+                      </div>
+                      <div style="display: flex; gap: 8px; margin-top: auto;">
+                        <template x-if="!isAppInstalled(app.id)">
+                          <button class="btn" @click="installIndexApp(app)">Install App</button>
+                        </template>
+                        <template x-if="isAppInstalled(app.id)">
+                          <button class="btn btn-success" disabled>Installed</button>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <!-- Channel / Chat Tab -->
+            <template x-if="activeTab === 'channel' && activeChannel">
+              <div class="messenger-container">
+                <!-- Message Thread Transcript Area -->
+                <div class="messages-list" id="chat-messages-container">
+                  <template x-for="msg in activeChannelView.messages" :key="msg.id">
+                    <div class="message-item" :class="{ 'mine': msg.author === participant.id }">
+                      <div class="message-meta">
+                        <span class="message-author" x-text="msg.author === participant.id ? 'You' : msg.author.substring(0, 8)">Author</span>
+                        <span x-text="new Date(msg.timestamp).toLocaleTimeString()">Time</span>
+                        <template x-if="msg.edits.length > 0">
+                          <span style="font-style: italic; color: var(--text-muted);">(edited)</span>
+                        </template>
+                      </div>
+                      
+                      <div class="message-body" x-text="msg.body">Message Text</div>
+                      
+                      <!-- Reactions list -->
+                      <div class="reactions-bar" x-show="msg.reactions.length > 0">
+                        <template x-for="react in msg.reactions" :key="react.symbol">
+                          <span class="reaction-badge" :class="{ 'active': react.authors.includes(participant.id) }" @click="toggleReaction(msg, react.symbol)" x-text="react.symbol + ' ' + react.count">👍 1</span>
+                        </template>
+                      </div>
+
+                      <div class="message-actions">
+                        <button class="message-action-btn" @click="triggerReaction(msg, '👍')">👍</button>
+                        <button class="message-action-btn" @click="triggerReaction(msg, '❤️')">❤️</button>
+                        <template x-if="msg.author === participant.id">
+                          <button class="message-action-btn" @click="startEdit(msg)">Edit</button>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- Input Message Bar -->
+                <div class="input-bar">
+                  <input type="text" class="input" placeholder="Type a message..." x-model="messageInput" @keydown.enter="postMessage()" />
+                  <button class="btn" @click="postMessage()">Send</button>
+                  <button class="btn btn-secondary" @click="generateInvitePrompt()">Invite Member</button>
+                </div>
+              </div>
+            </template>
+
+          </div>
+        </div>
+
+      </div>
+    </template>
+
+    <!-- Modals -->
+
+    <!-- Create Channel Modal -->
+    <template x-if="showCreateChannelModal">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Create New Channel</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" class="input" placeholder="Channel Name" x-model="newChannelName" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" @click="createChannel()" :disabled="!newChannelName">Create</button>
+              <button class="btn btn-secondary" @click="showCreateChannelModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Join Channel Modal -->
+    <template x-if="showJoinChannelModal">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Join Channel</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4;">
+              Paste the invite code shared by an administrator of the channel to import the genesis and obtain capabilities.
+            </p>
+            <input type="text" class="input" placeholder="Paste Invite Code" x-model="inviteCodeInput" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" @click="joinChannel()" :disabled="!inviteCodeInput">Join</button>
+              <button class="btn btn-secondary" @click="showJoinChannelModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Profile Detail / Export Modal -->
+    <template x-if="showIdentityDetails">
+      <div class="overlay" @click="showIdentityDetails = false">
+        <div class="dialog glass" @click.stop>
+          <h2>Identity Configuration</h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
+            Your keys are kept inside browser LocalStorage. Ensure you back them up, as lost keys cannot be recovered by any coordinator.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
+            <div>
+              <span style="font-weight: 600; font-size: 0.85rem;">Identity Hex Key:</span>
+              <div style="font-family: 'Source Code Pro', monospace; background: var(--bg-primary); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem; word-break: break-all;" x-text="participant.id"></div>
+            </div>
+            <button class="btn btn-secondary" @click="exportIdentity()">Export Identity Payload</button>
+            <button class="btn btn-success" @click="showIdentityDetails = false">Close</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Edit Message Modal -->
+    <template x-if="editingMessage">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Edit Message</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" class="input" x-model="editingMessageBody" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" @click="saveEdit()">Save</button>
+              <button class="btn btn-secondary" @click="editingMessage = null">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+  </body>
+</html>
