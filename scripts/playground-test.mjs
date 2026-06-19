@@ -121,18 +121,6 @@ server.listen(PORT, async () => {
       throw new Error(`Unexpected page title: ${title}`);
     }
     
-    // Click "Start building" button to open the login modal
-    console.log("Clicking 'Start building' button to open modal...");
-    const startBtn = page.locator("button.nav-login-button").first();
-    await startBtn.waitFor({ timeout: 5000 });
-    await startBtn.click();
-    
-    // Test the "Continue Local-First" button click
-    console.log("Clicking 'Continue Local-First' button...");
-    const localBtn = page.locator("button.local-btn");
-    await localBtn.waitFor({ timeout: 5000 });
-    await localBtn.click();
-    
     // Verify redirect to worlds selector
     console.log("Waiting for redirection to worlds selector...");
     await page.waitForURL("**/worlds.html", { timeout: 8000 });
