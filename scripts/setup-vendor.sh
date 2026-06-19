@@ -81,6 +81,14 @@ for f in "$PLAYGROUND_DIR"/public/*.html; do
     ln -sf "../../../vendor/playground/public/$base" "$WEB_DIR/$base"
 done
 
+# Copy custom blocks into Playground blocks directory
+echo "setup-vendor: copying custom blocks..."
+cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/shell-block.html" "$VENDOR_DIR/playground/blocks/"
+cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/messenger-block.html" "$VENDOR_DIR/playground/blocks/"
+
+# Copy custom CSS into Playground public assets CSS directory
+echo "setup-vendor: copying custom CSS..."
+cp -f "$ROOT/crates/holospaces-web/web/custom-css/apps.css" "$VENDOR_DIR/playground/public/assets/css/"
 
 echo "setup-vendor: completed successfully."
 

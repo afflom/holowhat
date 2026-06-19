@@ -245,7 +245,8 @@ async function bootstrapPresets() {
       "profile-block.html", "spotlight-block.html", "spotlight-button-block.html",
       "user-block.html", "window-block.html", "world-block.html",
       "world-cell-mixin.html", "world-scroll-mixin.html", "world-sync-mixin.html",
-      "world-theme-mixin.html", "world-upload-mixin.html", "worlds-block.html"
+      "world-theme-mixin.html", "world-upload-mixin.html", "worlds-block.html",
+      "shell-block.html", "messenger-block.html"
     ];
     
     for (const block of blocks) {
