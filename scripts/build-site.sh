@@ -109,14 +109,18 @@ stage_dir = "'"$STAGE_DIR"'"
 replacements = [
     (re.compile(r"\"/assets/"), "\"assets/"),
     (re.compile(r"'\''/assets/"), "'\''assets/"),
+    (re.compile(r"`/assets/"), "`assets/"),
     (re.compile(r"url\(\"/assets/"), "url(\"assets/"),
     (re.compile(r"url\('\''/assets/"), "url('\''assets/"),
     (re.compile(r"\"/blocks/"), "\"blocks/"),
     (re.compile(r"'\''/blocks/"), "'\''blocks/"),
+    (re.compile(r"`/blocks/"), "`blocks/"),
     (re.compile(r"\"/utils/"), "\"utils/"),
     (re.compile(r"'\''/utils/"), "'\''utils/"),
+    (re.compile(r"`/utils/"), "`utils/"),
     (re.compile(r"\"/pkg/"), "\"pkg/"),
     (re.compile(r"'\''/pkg/"), "'\''pkg/"),
+    (re.compile(r"`/pkg/"), "`pkg/"),
     (re.compile(r"\.\./\.\./\.\./pkg/"), "../../pkg/"),
     (re.compile(r"\{\{\s*AUTOMERGE_ID\s*\}\}"), "2RsvqRvmUqCmxPhEbdXtwW4qsdFm"),
 ]
