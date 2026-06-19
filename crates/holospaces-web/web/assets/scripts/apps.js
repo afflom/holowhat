@@ -787,7 +787,20 @@ Alpine.data("shell", () => {
       }
     },
 
-    selectChannel(ch) {
+    async selectChannel(ch) {
+      if (!ch.collection) {
+        const col = new Collection(ch.id, messengerReducer);
+        const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+        for (const evId of eventIds) {
+          const raw = localStorage.getItem(`holoapps_event:${evId}`);
+          if (raw) {
+            const evData = JSON.parse(raw);
+            const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+            await col.addEvent(ev);
+          }
+        }
+        ch.collection = col;
+      }
       this.activeChannel = ch;
       this.activeTab = "channel";
       this.topBarTitle = `Channel: ${ch.name}`;
@@ -829,11 +842,19 @@ Alpine.data("shell", () => {
             }
           }
 
-          this.channels.push({
-            id: genesis.id,
-            name: payload.name || "Joined Channel",
-            collection: col
-          });
+          const existingCh = this.channels.find(c => c.id === genesis.id);
+          if (existingCh) {
+            existingCh.collection = col;
+            if (payload.name) {
+              existingCh.name = payload.name;
+            }
+          } else {
+            this.channels.push({
+              id: genesis.id,
+              name: payload.name || "Joined Channel",
+              collection: col
+            });
+          }
 
           this.inviteCodeInput = "";
           this.showJoinChannelModal = false;

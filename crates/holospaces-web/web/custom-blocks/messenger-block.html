@@ -268,32 +268,46 @@
       const shellBlock = document.querySelector("shell-block");
       if (shellBlock && shellBlock.shadowRoot) {
         const wrapper = shellBlock.shadowRoot.querySelector(".shell-wrapper");
-        if (wrapper) return Alpine.$data(wrapper);
+        if (wrapper) {
+          return Alpine.$data(wrapper);
+        }
       }
       return null;
     },
 
     getCollection() {
       const shell = this.getShell();
-      if (!shell) return null;
-      const ch = shell.channels.find(c => c.id === this.channelId);
+      if (!shell) {
+        return null;
+      }
+      const channelId = (this.props ? this.props.channelId : this.channelId);
+      const ch = shell.channels.find(c => c.id === channelId);
       return ch ? ch.collection : null;
     },
 
     getChannelName() {
       const shell = this.getShell();
       if (!shell) return "general";
-      const ch = shell.channels.find(c => c.id === this.channelId);
+      const ch = shell.channels.find(c => c.id === (this.props ? this.props.channelId : this.channelId));
       return ch ? ch.name : "general";
     },
 
     async refresh() {
       const col = this.getCollection();
       if (col) {
+        // Unwrap and store any epoch keys we have access to
+        const shell = this.getShell();
+        if (shell && shell.participant) {
+          for (const ev of col.events.values()) {
+            if (ev.header.kind === "epoch") {
+              await col.unwrapAndStoreEpochKey(ev, shell.participant);
+            }
+          }
+        }
+
         this.view = await col.render();
         
         // Auto-discover message authors as contacts
-        const shell = this.getShell();
         if (shell && typeof shell.discoverContact === "function") {
           for (const msg of this.view.messages) {
             if (msg.author !== this.identity) {
@@ -735,10 +749,14 @@
 
     async invite() {
       const col = this.getCollection();
-      if (!col) return;
+      if (!col) {
+        return;
+      }
 
       const shell = this.getShell();
-      if (!shell) return;
+      if (!shell) {
+        return;
+      }
       const p = shell.participant;
 
       const savedContacts = JSON.parse(localStorage.getItem("holoapps_contacts") || "[]");
@@ -776,65 +794,67 @@
         if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
       }
 
-      const grantEvent = await Event.create({
-        kind: "membership",
-        author: p.id,
-        collectionId: col.id,
-        parents,
-        clock: maxClock + 1,
-        payload: {
-          target: targetId,
-          action: "grant",
-          capabilities: ["read", "write"],
-          curveId: targetCurveId
-        }
-      }, p);
-
-      const grantAdded = await col.addEvent(grantEvent);
-      if (!grantAdded) {
-        alert("Failed to grant membership. Are you an admin of this channel?");
-        return;
-      }
-      this.saveEventOnShell(shell, grantEvent);
-
-      let epochKey = col.epochKeys.get(col.currentEpochId);
-      if (!epochKey) {
-        epochKey = await HoloAppsCrypto.generateEpochKey();
-      }
-
-      const myWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, p.curveId);
-      const targetWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, targetCurveId);
-
-      const epochParents = Array.from(col.heads);
-      let epochMaxClock = 0;
-      for (const pId of epochParents) {
-        const parent = col.events.get(pId);
-        if (parent && parent.header.clock > epochMaxClock) epochMaxClock = parent.header.clock;
-      }
-
-      const epochEvent = await Event.create({
-        kind: "epoch",
-        author: p.id,
-        collectionId: col.id,
-        parents: epochParents,
-        clock: epochMaxClock + 1,
-        payload: {
-          senderCurveId: p.curveId,
-          wrappedKeys: {
-            [p.id]: myWrappedKey,
-            [targetId]: targetWrappedKey
+      if (!col.members.has(targetId)) {
+        const grantEvent = await Event.create({
+          kind: "membership",
+          author: p.id,
+          collectionId: col.id,
+          parents,
+          clock: maxClock + 1,
+          payload: {
+            target: targetId,
+            action: "grant",
+            capabilities: ["read", "write"],
+            curveId: targetCurveId
           }
-        }
-      }, p);
+        }, p);
 
-      const epochAdded = await col.addEvent(epochEvent);
-      if (!epochAdded) {
-        alert("Failed to update security keys.");
-        return;
+        const grantAdded = await col.addEvent(grantEvent);
+        if (!grantAdded) {
+          alert("Failed to grant membership. Are you an admin of this channel?");
+          return;
+        }
+        this.saveEventOnShell(shell, grantEvent);
+
+        let epochKey = col.epochKeys.get(col.currentEpochId);
+        if (!epochKey) {
+          epochKey = await HoloAppsCrypto.generateEpochKey();
+        }
+
+        const myWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, p.curveId);
+        const targetWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, targetCurveId);
+
+        const epochParents = Array.from(col.heads);
+        let epochMaxClock = 0;
+        for (const pId of epochParents) {
+          const parent = col.events.get(pId);
+          if (parent && parent.header.clock > epochMaxClock) epochMaxClock = parent.header.clock;
+        }
+
+        const epochEvent = await Event.create({
+          kind: "epoch",
+          author: p.id,
+          collectionId: col.id,
+          parents: epochParents,
+          clock: epochMaxClock + 1,
+          payload: {
+            senderCurveId: p.curveId,
+            wrappedKeys: {
+              [p.id]: myWrappedKey,
+              [targetId]: targetWrappedKey
+            }
+          }
+        }, p);
+
+        const epochAdded = await col.addEvent(epochEvent);
+        if (!epochAdded) {
+          alert("Failed to update security keys.");
+          return;
+        }
+        this.saveEventOnShell(shell, epochEvent);
+        col.epochKeys.set(epochEvent.id, epochKey);
+        col.currentEpochId = epochEvent.id;
       }
-      this.saveEventOnShell(shell, epochEvent);
-      col.epochKeys.set(epochEvent.id, epochKey);
-      col.currentEpochId = epochEvent.id;
 
       const allEvents = Array.from(col.events.values()).map(ev => ({
         header: ev.header,

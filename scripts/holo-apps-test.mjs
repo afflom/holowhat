@@ -521,6 +521,173 @@ async function runTests() {
     }
     console.log("✓ StandardsValidator ESM validation PASSED");
 
+    // 11. Peer Invitation, Secure Messaging, and Channel Reconciliation
+    console.log("\n11. Testing Peer Invitation, Secure Messaging, and Channel Reconciliation...");
+    
+    // Alice and Bob key setups
+    const aliceParticipant = await Participant.create();
+    const bobParticipant = await Participant.create();
+    
+    // Alice creates channel genesis
+    const aliceChanGenesis = await Event.create({
+      kind: "genesis",
+      author: aliceParticipant.id,
+      collectionId: "temp-channel-p2p",
+      payload: {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Conversation",
+        "name": "p2p-chat",
+        "published": new Date().toISOString()
+      }
+    }, aliceParticipant);
+    
+    const aliceChanCol = new Collection(aliceChanGenesis.id, messengerReducer);
+    await aliceChanCol.addEvent(aliceChanGenesis);
+    
+    // Alice invites Bob: Alice creates a membership grant first
+    const bobGrantEvent = await Event.create({
+      kind: "membership",
+      author: aliceParticipant.id,
+      collectionId: aliceChanGenesis.id,
+      parents: [aliceChanGenesis.id],
+      clock: 1,
+      payload: {
+        target: bobParticipant.id,
+        action: "grant",
+        capabilities: ["read", "write"],
+        curveId: bobParticipant.curveId
+      }
+    }, aliceParticipant);
+    
+    await aliceChanCol.addEvent(bobGrantEvent);
+    
+    // Alice generates a secret epoch key and wraps it for both herself and Bob
+    const aliceSecretKey = await HoloAppsCrypto.generateEpochKey();
+    const aliceWrappedForSelf = await HoloAppsCrypto.wrapEpochKey(aliceSecretKey, aliceParticipant.curveKeys.privateKey, aliceParticipant.curveId);
+    const aliceWrappedForBob = await HoloAppsCrypto.wrapEpochKey(aliceSecretKey, aliceParticipant.curveKeys.privateKey, bobParticipant.curveId);
+    
+    const keyRotationEvent = await Event.create({
+      kind: "epoch",
+      author: aliceParticipant.id,
+      collectionId: aliceChanGenesis.id,
+      parents: [bobGrantEvent.id],
+      clock: 2,
+      payload: {
+        senderCurveId: aliceParticipant.curveId,
+        wrappedKeys: {
+          [aliceParticipant.id]: aliceWrappedForSelf,
+          [bobParticipant.id]: aliceWrappedForBob
+        }
+      }
+    }, aliceParticipant);
+    
+    await aliceChanCol.addEvent(keyRotationEvent);
+    await aliceChanCol.unwrapAndStoreEpochKey(keyRotationEvent, aliceParticipant);
+    
+    // Alice writes message 1 (encrypted) under the new keyRotationEvent epoch
+    const aliceMsg1 = await Event.create({
+      kind: "message",
+      author: aliceParticipant.id,
+      collectionId: aliceChanGenesis.id,
+      parents: [keyRotationEvent.id],
+      epochId: keyRotationEvent.id,
+      clock: 3,
+      payload: {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Create",
+        "object": {
+          "type": "Note",
+          "content": "Secret handshake from Alice"
+        }
+      }
+    }, aliceParticipant, aliceSecretKey);
+    
+    await aliceChanCol.addEvent(aliceMsg1);
+    
+    // Export invite payload from Alice's side
+    const aliceAllEvents = Array.from(aliceChanCol.events.values()).map(ev => ({
+      header: ev.header,
+      body: ev.body,
+      signature: ev.signature,
+      id: ev.id
+    }));
+    
+    const inviteObj = {
+      id: aliceChanCol.id,
+      name: "p2p-chat",
+      genesisEvent: aliceAllEvents.find(e => e.header.kind === "genesis"),
+      events: aliceAllEvents.filter(e => e.header.kind !== "genesis")
+    };
+    
+    const inviteCodeString = base64Encode(JSON.stringify(inviteObj));
+    
+    // --- BOB JOINS ---
+    const bobPayload = JSON.parse(base64Decode(inviteCodeString));
+    assert.strictEqual(bobPayload.id, aliceChanCol.id);
+    
+    const bobP2PGenesisData = bobPayload.genesisEvent;
+    const bobP2PGenesis = new Event(bobP2PGenesisData.header, bobP2PGenesisData.body, bobP2PGenesisData.signature, bobP2PGenesisData.id);
+    
+    const bobChanCol = new Collection(bobP2PGenesis.id, messengerReducer);
+    await bobChanCol.addEvent(bobP2PGenesis);
+    
+    for (const evData of bobPayload.events) {
+      const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+      await bobChanCol.addEvent(ev);
+    }
+    
+    // Bob unwraps epoch keys to read channel history
+    for (const ev of bobChanCol.events.values()) {
+      if (ev.header.kind === "epoch") {
+        await bobChanCol.unwrapAndStoreEpochKey(ev, bobParticipant);
+      }
+    }
+    
+    // Bob renders the view and verifies Alice's message is decrypted
+    const bobView = await bobChanCol.render();
+    assert.strictEqual(bobView.messages.length, 1);
+    assert.strictEqual(bobView.messages[0].body, "Secret handshake from Alice");
+    
+    // Bob replies back to Alice
+    const bobReply = await Event.create({
+      kind: "message",
+      author: bobParticipant.id,
+      collectionId: bobChanCol.id,
+      parents: Array.from(bobChanCol.heads),
+      epochId: keyRotationEvent.id,
+      clock: 4,
+      payload: {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Create",
+        "object": {
+          "type": "Note",
+          "content": "Bob is in! Hello Alice!"
+        }
+      }
+    }, bobParticipant, aliceSecretKey); // uses same decrypted epoch key
+    
+    await bobChanCol.addEvent(bobReply);
+    
+    // Bob exports his new state to Alice
+    const bobAllEvents = Array.from(bobChanCol.events.values()).map(ev => ({
+      header: ev.header,
+      body: ev.body,
+      signature: ev.signature,
+      id: ev.id
+    }));
+    
+    // Alice reconciles Bob's events
+    for (const evData of bobAllEvents) {
+      const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+      await aliceChanCol.addEvent(ev);
+    }
+    
+    // Alice renders the view and verifies Bob's reply is visible
+    const aliceView = await aliceChanCol.render();
+    assert.strictEqual(aliceView.messages.length, 2);
+    assert.strictEqual(aliceView.messages[1].body, "Bob is in! Hello Alice!");
+    console.log("✓ Peer Invitation, Secure Messaging, and Channel Reconciliation PASSED");
+
     console.log("\n==============================================");
     console.log("🎉 ALL holo-apps Architecture Validation Tests PASSED!");
     console.log("==============================================");
