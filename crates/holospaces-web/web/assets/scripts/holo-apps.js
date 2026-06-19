@@ -39,11 +39,74 @@ export function base64Encode(str) {
   return btoa(unescape(encodeURIComponent(str)));
 }
 
-/**
- * Unicode-safe Base64 decoding.
- */
 export function base64Decode(str) {
-  return decodeURIComponent(escape(atob(str)));
+  if (!str) return "";
+  let cleanStr = str.trim();
+
+  // If it's a full URL, try to extract the base64 payload from query parameters or hash
+  if (cleanStr.startsWith("http://") || cleanStr.startsWith("https://")) {
+    try {
+      const url = new URL(cleanStr);
+      const params = ["invite", "code", "join", "payload", "key"];
+      let found = false;
+      for (const p of params) {
+        const val = url.searchParams.get(p);
+        if (val) {
+          cleanStr = val.trim();
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        // Try hash (e.g. #invite=...)
+        const hashStr = url.hash.substring(1);
+        if (hashStr) {
+          const hashParams = new URLSearchParams(hashStr);
+          for (const p of params) {
+            const val = hashParams.get(p);
+            if (val) {
+              cleanStr = val.trim();
+              found = true;
+              break;
+            }
+          }
+          if (!found && hashStr.length > 20) {
+            cleanStr = hashStr.trim();
+          }
+        }
+      }
+      if (cleanStr.startsWith("http://") || cleanStr.startsWith("https://")) {
+        // Check for any long query parameter value
+        let longest = "";
+        url.searchParams.forEach((value) => {
+          if (value.length > longest.length) {
+            longest = value;
+          }
+        });
+        if (longest.length > 20) {
+          cleanStr = longest.trim();
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to parse base64 input as URL:", e);
+    }
+  }
+
+  // Remove any whitespace, newlines, carriage returns, tabs
+  cleanStr = cleanStr.replace(/\s+/g, "");
+
+  // Convert base64url characters to standard base64 characters
+  cleanStr = cleanStr.replace(/-/g, "+").replace(/_/g, "/");
+
+  // Restore padding if missing
+  const pad = cleanStr.length % 4;
+  if (pad === 2) {
+    cleanStr += "==";
+  } else if (pad === 3) {
+    cleanStr += "=";
+  }
+
+  return decodeURIComponent(escape(atob(cleanStr)));
 }
 
 /**

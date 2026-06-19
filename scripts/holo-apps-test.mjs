@@ -1,4 +1,4 @@
-import { Participant, Event, Collection, App, AppIndex, Shell, canonicalJson, sha256, HoloAppsCrypto } from "../crates/holospaces-web/web/assets/scripts/holo-apps.js";
+import { Participant, Event, Collection, App, AppIndex, Shell, canonicalJson, sha256, HoloAppsCrypto, base64Encode, base64Decode } from "../crates/holospaces-web/web/assets/scripts/holo-apps.js";
 import { messengerReducer, createMessengerApp } from "../crates/holospaces-web/web/assets/scripts/holo-messenger.js";
 import assert from "assert";
 import fs from "fs";
@@ -434,6 +434,47 @@ async function runTests() {
     assert.strictEqual(bobWsState.channels[0].name, "general");
     assert.strictEqual(bobWsState.channels[1].name, "development");
     console.log("✓ Workspace Replication & Sync validation PASSED");
+
+    // 9. Robust Base64 Decoder Verification
+    console.log("\n9. Testing Robust Base64 Decoder...");
+    
+    // Test Case 1: Standard Base64 String
+    const originalText = "Hello, WebOS Standards-Based Workspace!";
+    const standardB64 = base64Encode(originalText);
+    const decoded1 = base64Decode(standardB64);
+    assert.strictEqual(decoded1, originalText, "Standard base64 decoding must succeed");
+
+    // Test Case 2: Base64 String with whitespaces, tabs, newlines
+    const messyB64 = `  \n  ${standardB64.slice(0, 10)} \n\r \t ${standardB64.slice(10)}  \n`;
+    const decoded2 = base64Decode(messyB64);
+    assert.strictEqual(decoded2, originalText, "Base64 decoding must strip all types of whitespace");
+
+    // Test Case 3: Base64url characters (- and _)
+    const urlSafeB64 = "eyJhIn0_eyJiIn0-"; // _ is /, - is +
+    const decoded3 = base64Decode(urlSafeB64);
+    assert.ok(decoded3, "Should decode base64url characters without throwing");
+
+    // Test Case 4: Base64 with missing padding '='
+    const unpaddedB64 = standardB64.replace(/=/g, "");
+    const decoded4 = base64Decode(unpaddedB64);
+    assert.strictEqual(decoded4, originalText, "Base64 decoding must restore missing padding");
+
+    // Test Case 5: Full invite URL query param parsing
+    const inviteLink = `https://afflom.github.io/holowhat/apps.html?invite=${standardB64}`;
+    const decodedLink1 = base64Decode(inviteLink);
+    assert.strictEqual(decodedLink1, originalText, "Base64 decoding must extract payload from 'invite' query parameter");
+
+    // Test Case 6: Full invite URL with code parameter
+    const inviteLinkCode = `https://afflom.github.io/holowhat/apps.html?code=${standardB64}`;
+    const decodedLink2 = base64Decode(inviteLinkCode);
+    assert.strictEqual(decodedLink2, originalText, "Base64 decoding must extract payload from 'code' query parameter");
+
+    // Test Case 7: Full invite URL with hash payload
+    const inviteLinkHash = `https://afflom.github.io/holowhat/apps.html#invite=${standardB64}`;
+    const decodedLink3 = base64Decode(inviteLinkHash);
+    assert.strictEqual(decodedLink3, originalText, "Base64 decoding must extract payload from hash parameters");
+
+    console.log("✓ Robust Base64 Decoder validation PASSED");
 
     console.log("\n==============================================");
     console.log("🎉 ALL holo-apps Architecture Validation Tests PASSED!");
