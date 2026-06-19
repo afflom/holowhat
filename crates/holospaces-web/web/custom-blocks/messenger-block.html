@@ -54,7 +54,9 @@
 </div>
 
 <script type="module">
-  import { Event, canonicalJson, sha256 } from "/assets/scripts/holo-apps.js";
+  const origin = window.location.origin;
+  const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : "";
+  const { Event, canonicalJson, sha256, base64Encode, base64Decode, HoloAppsCrypto } = await import(`${origin}${base}/assets/scripts/holo-apps.js`);
 
   export default {
     mixins: [],
@@ -80,9 +82,22 @@
       clearInterval(this._pollInterval);
     },
 
+    getShell() {
+      const bodyShellEl = document.querySelector("body[x-data='shell']");
+      if (bodyShellEl) {
+        return Alpine.$data(bodyShellEl);
+      }
+      const shellBlock = document.querySelector("shell-block");
+      if (shellBlock && shellBlock.shadowRoot) {
+        const wrapper = shellBlock.shadowRoot.querySelector(".shell-wrapper");
+        if (wrapper) return Alpine.$data(wrapper);
+      }
+      return null;
+    },
+
     getCollection() {
-      // Find collection inside the shell block active channels
-      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const shell = this.getShell();
+      if (!shell) return null;
       const ch = shell.channels.find(c => c.id === this.channelId);
       return ch ? ch.collection : null;
     },
@@ -91,6 +106,16 @@
       const col = this.getCollection();
       if (col) {
         this.view = await col.render();
+        
+        // Auto-discover message authors as contacts
+        const shell = this.getShell();
+        if (shell && typeof shell.discoverContact === "function") {
+          for (const msg of this.view.messages) {
+            if (msg.author !== this.identity) {
+              shell.discoverContact(msg.author, "", "Operator " + msg.author.substring(0, 6));
+            }
+          }
+        }
       }
     },
 
@@ -99,7 +124,8 @@
       const col = this.getCollection();
       if (!col) return;
 
-      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const shell = this.getShell();
+      if (!shell) return;
       const p = shell.participant;
       const parents = Array.from(col.heads);
       
@@ -115,12 +141,23 @@
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
-        payload: { body: this.text, timestamp: Date.now() }
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Create",
+          "object": {
+            "type": "Note",
+            "content": this.text,
+            "published": new Date().toISOString()
+          },
+          // Backward compatibility fallbacks
+          "body": this.text,
+          "timestamp": Date.now()
+        }
       }, p);
 
       const added = await col.addEvent(ev);
       if (added) {
-        shell.saveEvent(ev);
+        this.saveEventOnShell(shell, ev);
         this.text = "";
         await this.refresh();
 
@@ -131,11 +168,20 @@
       }
     },
 
+    saveEventOnShell(shell, ev) {
+      if (typeof shell.saveEvent === "function") {
+        shell.saveEvent(ev);
+      } else if (typeof shell.saveEventToStorage === "function") {
+        shell.saveEventToStorage(ev);
+      }
+    },
+
     async toggleReact(msg, symbol) {
       const col = this.getCollection();
       if (!col) return;
 
-      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const shell = this.getShell();
+      if (!shell) return;
       const p = shell.participant;
       const parents = Array.from(col.heads);
       
@@ -151,12 +197,20 @@
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
-        payload: { target: msg.id, symbol }
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Like",
+          "object": msg.id,
+          "content": symbol,
+          // Backward compatibility fallbacks
+          "target": msg.id,
+          "symbol": symbol
+        }
       }, p);
 
       const added = await col.addEvent(ev);
       if (added) {
-        shell.saveEvent(ev);
+        this.saveEventOnShell(shell, ev);
         await this.refresh();
       }
     },
@@ -171,7 +225,8 @@
       const col = this.getCollection();
       if (!col) return;
 
-      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const shell = this.getShell();
+      if (!shell) return;
       const p = shell.participant;
       const parents = Array.from(col.heads);
       
@@ -187,30 +242,66 @@
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
-        payload: { target: this.editing.id, body: this.editText }
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Update",
+          "object": {
+            "type": "Note",
+            "id": this.editing.id,
+            "content": this.editText
+          },
+          // Backward compatibility fallbacks
+          "target": this.editing.id,
+          "body": this.editText
+        }
       }, p);
 
       const added = await col.addEvent(ev);
       if (added) {
-        shell.saveEvent(ev);
+        this.saveEventOnShell(shell, ev);
         await this.refresh();
         this.editing = null;
       }
     },
 
     async invite() {
-      const targetId = prompt("Enter Invitee's Identity Address (κ):");
-      if (!targetId) return;
-      const targetCurveId = prompt("Enter Invitee's ECDH Public Exchange Key:");
-      if (!targetCurveId) return;
-
       const col = this.getCollection();
       if (!col) return;
 
-      const shell = Alpine.$data(document.querySelector("shell-block").shadowRoot.querySelector(".shell-wrapper"));
+      const shell = this.getShell();
+      if (!shell) return;
       const p = shell.participant;
 
-      // 1. Author a membership grant event
+      // 1. Resolve invitee using contact pool if available
+      const savedContacts = JSON.parse(localStorage.getItem("holoapps_contacts") || "[]");
+      let targetId = "";
+      let targetCurveId = "";
+      let selectedContact = null;
+      
+      const otherContacts = savedContacts.filter(c => c.id !== p.id);
+      if (otherContacts.length > 0) {
+        const choices = otherContacts.map((c, idx) => `${idx + 1}. ${c.name} (${c.id.substring(0, 8)}...)`).join("\n");
+        const choice = prompt(`Select a contact to invite, or enter 'new':\n\n${choices}`);
+        if (!choice) return;
+        
+        if (choice.trim().toLowerCase() !== "new") {
+          const idx = parseInt(choice.trim()) - 1;
+          if (idx >= 0 && idx < otherContacts.length) {
+            selectedContact = otherContacts[idx];
+            targetId = selectedContact.id;
+            targetCurveId = selectedContact.curveId;
+          }
+        }
+      }
+      
+      if (!selectedContact) {
+        targetId = prompt("Enter Invitee's Identity Address (κ):");
+        if (!targetId) return;
+        targetCurveId = prompt("Enter Invitee's ECDH Public Exchange Key:");
+        if (!targetCurveId) return;
+      }
+
+      // 2. Author a membership grant event
       const parents = Array.from(col.heads);
       let maxClock = 0;
       for (const pId of parents) {
@@ -237,15 +328,14 @@
         alert("Failed to grant membership. Are you an admin of this channel?");
         return;
       }
-      shell.saveEvent(grantEvent);
+      this.saveEventOnShell(shell, grantEvent);
 
-      // 2. Generate and wrap a new/existing epoch key
+      // 3. Generate and wrap a new/existing epoch key
       let epochKey = col.epochKeys.get(col.currentEpochId);
       if (!epochKey) {
         epochKey = await HoloAppsCrypto.generateEpochKey();
       }
 
-      // Wrap for both target and self (for forward access)
       const myWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, p.curveId);
       const targetWrappedKey = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, targetCurveId);
 
@@ -276,11 +366,11 @@
         alert("Failed to add epoch key rotation event.");
         return;
       }
-      shell.saveEvent(epochEvent);
+      this.saveEventOnShell(shell, epochEvent);
       col.epochKeys.set(epochEvent.id, epochKey);
       col.currentEpochId = epochEvent.id;
 
-      // 3. Serialize invite payload
+      // 4. Serialize invite payload
       const allEvents = Array.from(col.events.values()).map(ev => ({
         header: ev.header,
         body: ev.body,
@@ -299,7 +389,7 @@
         events: allEvents.filter(e => e.header.kind !== "genesis")
       };
 
-      const serialized = btoa(JSON.stringify(inviteObj));
+      const serialized = base64Encode(JSON.stringify(inviteObj));
       prompt("Share this Invite Code with the invitee:", serialized);
     }
   }

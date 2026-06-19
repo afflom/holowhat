@@ -1,6 +1,9 @@
 import { Participant, Event, Collection, App, AppIndex, Shell, canonicalJson, sha256, HoloAppsCrypto } from "../crates/holospaces-web/web/assets/scripts/holo-apps.js";
 import { messengerReducer, createMessengerApp } from "../crates/holospaces-web/web/assets/scripts/holo-messenger.js";
 import assert from "assert";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 async function runTests() {
   console.log("==============================================");
@@ -199,6 +202,142 @@ async function runTests() {
     assert.strictEqual(reduced.messages[0].reactions[0].symbol, "👍", "Reactions should aggregate");
     assert.strictEqual(reduced.messages[0].reactions[0].count, 1, "Reaction count should update");
     console.log("✓ Messenger Reducer validation PASSED");
+
+    // 7. W3C ActivityStreams 2.0 & Schema.org Conformance Test
+    console.log("\n7. Testing W3C ActivityStreams 2.0 & Schema.org Standards Conformance...");
+    
+    // Import external validation artifacts (standards contexts)
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+    const asContextPath = path.join(__dirname, "activitystreams-context.json");
+    const schemaContextPath = path.join(__dirname, "schema-org-context.json");
+
+    const asContext = JSON.parse(fs.readFileSync(asContextPath, "utf-8"))["@context"];
+    const schemaContext = JSON.parse(fs.readFileSync(schemaContextPath, "utf-8"))["@context"];
+
+    function validateAgainstContext(obj, contextObj, name = "Object") {
+      for (const key of Object.keys(obj)) {
+        if (key === "@context" || key === "type" || key === "id" || key === "@type" || key === "@id") {
+          continue;
+        }
+        
+        const isDefined = (key in contextObj);
+        
+        if (typeof obj[key] === "object" && obj[key] !== null && !Array.isArray(obj[key])) {
+          const nestedContext = obj[key]["@context"] ? 
+            (obj[key]["@context"].includes("schema.org") ? schemaContext : asContext) : contextObj;
+          validateAgainstContext(obj[key], nestedContext, `${name}.${key}`);
+        } else if (Array.isArray(obj[key])) {
+          for (let i = 0; i < obj[key].length; i++) {
+            if (typeof obj[key][i] === "object" && obj[key][i] !== null) {
+              const nestedContext = obj[key][i]["@context"] ? 
+                (obj[key][i]["@context"].includes("schema.org") ? schemaContext : asContext) : contextObj;
+              validateAgainstContext(obj[key][i], nestedContext, `${name}.${key}[${i}]`);
+            }
+          }
+        }
+        
+        const allowedExtensions = ["curveId", "channels", "members"];
+        if (!isDefined && !allowedExtensions.includes(key)) {
+          throw new Error(`Property '${key}' in ${name} is not defined in the imported standards context!`);
+        }
+      }
+    }
+
+    function validateActivityStreams(payload, expectedType) {
+      assert.strictEqual(payload["@context"], "https://www.w3.org/ns/activitystreams", "Must include W3C ActivityStreams context");
+      assert.strictEqual(payload.type, expectedType, `Must be of type '${expectedType}'`);
+      validateAgainstContext(payload, asContext, expectedType);
+    }
+
+    // A. Validate Person (Contact)
+    const personObj = {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Person",
+      "id": alice.id,
+      "name": "Alice",
+      "curveId": alice.curveId
+    };
+    validateActivityStreams(personObj, "Person");
+    assert.ok(personObj.id.startsWith("04"), "Person ID should be a valid public key hex representation");
+    assert.ok(personObj.curveId.startsWith("04"), "Person Curve ID should be a valid public key hex representation");
+
+    // B. Validate Group (Workspace Org)
+    const groupObj = {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Group",
+      "name": "Local Swarm",
+      "channels": [{ "type": "Conversation", "id": "chan-1", "name": "general" }],
+      "members": [alice.id]
+    };
+    validateActivityStreams(groupObj, "Group");
+    assert.strictEqual(groupObj.name, "Local Swarm");
+    assert.strictEqual(groupObj.channels[0].type, "Conversation");
+
+    // C. Validate Create Note Activity (Message)
+    const createMsgPayload = {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Create",
+      "object": {
+        "type": "Note",
+        "content": "Hello standard world",
+        "published": new Date().toISOString()
+      }
+    };
+    validateActivityStreams(createMsgPayload, "Create");
+    assert.strictEqual(createMsgPayload.object.type, "Note");
+    assert.strictEqual(createMsgPayload.object.content, "Hello standard world");
+    assert.ok(!isNaN(Date.parse(createMsgPayload.object.published)), "Published should be a valid ISO Date string");
+
+    // D. Validate Update Note Activity (Edit)
+    const updateMsgPayload = {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Update",
+      "object": {
+        "type": "Note",
+        "id": "msg-1",
+        "content": "Hello standard world (edited)"
+      }
+    };
+    validateActivityStreams(updateMsgPayload, "Update");
+    assert.strictEqual(updateMsgPayload.object.type, "Note");
+    assert.strictEqual(updateMsgPayload.object.id, "msg-1");
+    assert.strictEqual(updateMsgPayload.object.content, "Hello standard world (edited)");
+
+    // E. Validate Like Activity (Reaction)
+    const likePayload = {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Like",
+      "object": "msg-1",
+      "content": "👍"
+    };
+    validateActivityStreams(likePayload, "Like");
+    assert.strictEqual(likePayload.object, "msg-1");
+    assert.strictEqual(likePayload.content, "👍");
+
+    // F. Validate that our reducer handles these standard payloads successfully!
+    const standardEvents = [
+      { id: "msg-1", author: alice.id, clock: 1, kind: "message", payload: createMsgPayload },
+      { id: "std-edit-1", author: alice.id, clock: 2, kind: "edit", payload: updateMsgPayload },
+      { id: "std-react-1", author: bob.id, clock: 3, kind: "reaction", payload: likePayload }
+    ];
+    const stdReduced = messengerReducer(standardEvents);
+    assert.strictEqual(stdReduced.messages.length, 1, "Standard Create activity should reduce to 1 message");
+    assert.strictEqual(stdReduced.messages[0].body, "Hello standard world (edited)", "Standard Update activity should apply edits correctly");
+    assert.strictEqual(stdReduced.messages[0].reactions[0].symbol, "👍", "Standard Like activity should apply reactions correctly");
+
+    // G. Validate a Schema.org Person object using the imported Schema.org context
+    const schemaPersonObj = {
+      "@context": "https://schema.org/docs/jsonldcontext.json",
+      "type": "Person",
+      "name": "Alice Developer",
+      "email": "alice@holospaces.org",
+      "url": "https://holospaces.org/alice"
+    };
+    assert.strictEqual(schemaPersonObj["@context"], "https://schema.org/docs/jsonldcontext.json");
+    validateAgainstContext(schemaPersonObj, schemaContext, "SchemaPerson");
+
+    console.log("✓ W3C ActivityStreams 2.0 & Schema.org Standards Conformance PASSED");
 
     console.log("\n==============================================");
     console.log("🎉 ALL holo-apps Architecture Validation Tests PASSED!");

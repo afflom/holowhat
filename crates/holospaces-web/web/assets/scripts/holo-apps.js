@@ -33,6 +33,20 @@ export function canonicalJson(val) {
 }
 
 /**
+ * Unicode-safe Base64 encoding.
+ */
+export function base64Encode(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+/**
+ * Unicode-safe Base64 decoding.
+ */
+export function base64Decode(str) {
+  return decodeURIComponent(escape(atob(str)));
+}
+
+/**
  * Helper to compute SHA-256 hash (content address κ) of a string.
  * Supports HashAxis verification (Law L5/SEC-1).
  */
