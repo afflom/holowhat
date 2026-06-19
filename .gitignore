@@ -40,6 +40,7 @@ crates/holospaces-web/web/assets/icons/
 crates/holospaces-web/web/assets/img/
 crates/holospaces-web/web/assets/scripts/*
 !crates/holospaces-web/web/assets/scripts/playground.js
+!crates/holospaces-web/web/assets/scripts/standards-validator.js
 crates/holospaces-web/web/*.html
 
 # Generated web/browser fixtures
