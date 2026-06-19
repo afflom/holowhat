@@ -103,6 +103,52 @@ async function runLiveTest() {
     await worldBlockWrapper.waitFor({ timeout: 15000 });
     console.log("Success: <world-block> component and its shadow elements are successfully initialized!");
     
+    // 8b. Navigate to Holo-Apps Shell
+    console.log("Navigating to live holo-apps shell (apps.html)...");
+    await page.goto(`${LIVE_URL}/apps.html`, { waitUntil: "networkidle" });
+    
+    // Check if sign-in button exists and click it
+    console.log("Clicking 'Generate New Identity Keypair' button...");
+    const genIdentityBtn = page.locator("button:has-text('Generate New Identity Keypair')");
+    await genIdentityBtn.waitFor({ timeout: 5000 });
+    await genIdentityBtn.click();
+    
+    // Verify Dashboard view
+    console.log("Verifying Sovereign Cryptographic Profile is displayed...");
+    const profileHdr = page.locator("h3:has-text('Sovereign Cryptographic Profile')");
+    await profileHdr.waitFor({ timeout: 5000 });
+    
+    // Create new channel
+    console.log("Creating a new channel...");
+    const createChBtn = page.locator("button:has-text('+ Create Channel')");
+    await createChBtn.click();
+    
+    const channelNameInput = page.locator("input[placeholder='Channel Name']");
+    await channelNameInput.waitFor({ timeout: 5000 });
+    await channelNameInput.fill("E2E Test Channel");
+    
+    const submitCreateChBtn = page.locator("button:has-text('Create')");
+    await submitCreateChBtn.click();
+    
+    // Verify Channel created and listed
+    console.log("Selecting the created channel...");
+    const channelListItem = page.locator("li.sidebar-item:has-text('E2E Test Channel')");
+    await channelListItem.waitFor({ timeout: 5000 });
+    await channelListItem.click();
+    
+    // Send a message
+    console.log("Sending a message in channel...");
+    const messageInput = page.locator("input[placeholder='Type a message...']");
+    await messageInput.waitFor({ timeout: 5000 });
+    await messageInput.fill("Automated Live E2E Message");
+    await page.keyboard.press("Enter");
+    
+    // Verify message rendered
+    console.log("Verifying message is rendered in the transcript...");
+    const messageItem = page.locator(".message-body:has-text('Automated Live E2E Message')");
+    await messageItem.waitFor({ timeout: 8000 });
+    console.log("Holo-Apps Shell live E2E verification passed successfully!");
+    
     // 9. Check if any errors occurred during E2E flow
     if (pageErrors.length > 0) {
       throw new Error(`Browser encountered ${pageErrors.length} warnings/exceptions: ${pageErrors.map(e => e.message).join(", ")}`);
