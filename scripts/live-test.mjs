@@ -62,20 +62,7 @@ async function runLiveTest() {
       throw new Error(`Unexpected page title: ${title}`);
     }
     
-    // 2. Click 'Start building' to open login modal
-    console.log("Clicking 'Start building' button to open modal...");
-    const startBtn = page.locator("button.nav-login-button").first();
-    await startBtn.waitFor({ timeout: 5000 });
-    await startBtn.click();
-    
-    // 3. Click 'Continue Local-First'
-    console.log("Clicking 'Continue Local-First' button...");
-    const localBtn = page.locator("button.local-btn");
-    await localBtn.waitFor({ timeout: 5000 });
-    await localBtn.click();
-    
-    // 4. Verify Redirection to Worlds Selector
-    console.log("Waiting for redirection to worlds selector...");
+    // 2. Wait for auto-redirection to worlds selector
     await page.waitForURL("**/worlds.html", { timeout: 8000 });
     console.log("Successfully redirected to worlds selector:", page.url());
     
@@ -108,19 +95,29 @@ async function runLiveTest() {
     await page.goto(`${LIVE_URL}/apps.html`, { waitUntil: "networkidle" });
     
     // Check if sign-in button exists and click it
-    console.log("Clicking 'Create Profile' button...");
-    const genIdentityBtn = page.locator("button:has-text('Create Profile')");
-    await genIdentityBtn.waitFor({ timeout: 5000 });
-    await genIdentityBtn.click();
+    const genIdentityBtn = page.locator("button:has-text('Create Profile'), button:has-text('Create New User Profile')").first();
+    if (await genIdentityBtn.isVisible()) {
+      console.log("Creating new user profile...");
+      await genIdentityBtn.click();
+    } else {
+      console.log("Existing identity loaded automatically.");
+    }
     
     // Verify Dashboard view
     console.log("Verifying User Account & Security is displayed...");
     const profileHdr = page.locator("h3:has-text('User Account & Security')");
     await profileHdr.waitFor({ timeout: 5000 });
     
+    // Wait for default workspace 'Local Swarm' bootstrapping and select it
+    console.log("Waiting for default workspace 'Local Swarm' bootstrapping...");
+    const localSwarmSidebar = page.locator(".sidebar-item:has-text('Local Swarm')");
+    await localSwarmSidebar.waitFor({ timeout: 10000 });
+    console.log("Selecting default workspace 'Local Swarm'...");
+    await localSwarmSidebar.click();
+
     // Create new channel
     console.log("Creating a new channel...");
-    const createChBtn = page.locator("button:has-text('+ Create Channel')");
+    const createChBtn = page.locator("button:has-text('+ Channel')");
     await createChBtn.click();
     
     const channelNameInput = page.locator("input[placeholder='Channel Name']");
@@ -138,14 +135,14 @@ async function runLiveTest() {
     
     // Send a message
     console.log("Sending a message in channel...");
-    const messageInput = page.locator("input[placeholder='Type a message...']");
+    const messageInput = page.locator("input.chat-input");
     await messageInput.waitFor({ timeout: 5000 });
     await messageInput.fill("Automated Live E2E Message");
     await page.keyboard.press("Enter");
     
     // Verify message rendered
     console.log("Verifying message is rendered in the transcript...");
-    const messageItem = page.locator(".message-body:has-text('Automated Live E2E Message')");
+    const messageItem = page.locator(".message-body-text:has-text('Automated Live E2E Message')");
     await messageItem.waitFor({ timeout: 8000 });
     console.log("Holo-Apps Shell live E2E verification passed successfully!");
     
