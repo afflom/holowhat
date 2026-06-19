@@ -1,9 +1,12 @@
 import { Participant, Event, Collection, App, AppIndex, Shell, canonicalJson, sha256, HoloAppsCrypto, base64Encode, base64Decode } from "../crates/holospaces-web/web/assets/scripts/holo-apps.js";
 import { messengerReducer, createMessengerApp } from "../crates/holospaces-web/web/assets/scripts/holo-messenger.js";
+import { StandardsValidator } from "../crates/holospaces-web/web/assets/scripts/standards-validator.js";
 import assert from "assert";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function workspaceReducer(events) {
   const state = { name: "", channels: [], members: [] };
@@ -41,6 +44,21 @@ async function runTests() {
   console.log("==============================================");
 
   try {
+    // Mock fetch for StandardsValidator inside Node unit tests
+    global.fetch = async (url) => {
+      if (url.includes("assets/schemas/") || url.includes("schemas/")) {
+        const filename = url.split("/").pop();
+        const filePath = path.join(__dirname, "schemas", filename);
+        const content = fs.readFileSync(filePath, "utf-8");
+        return {
+          ok: true,
+          status: 200,
+          json: async () => JSON.parse(content)
+        };
+      }
+      throw new Error(`Unsupported fetch URL in Node test: ${url}`);
+    };
+
     // 1. Participant Cryptography Axes
     console.log("1. Testing Cryptographic Axes (Signature, Curve, Hash)...");
     const alice = await Participant.create();
@@ -237,8 +255,6 @@ async function runTests() {
     console.log("\n7. Testing W3C ActivityStreams 2.0 & Schema.org Standards Conformance...");
     
     // Import external validation artifacts (standards contexts)
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
     const asContextPath = path.join(__dirname, "schemas/activitystreams-context.json");
     const schemaContextPath = path.join(__dirname, "schemas/schema-org-context.json");
 
@@ -475,6 +491,35 @@ async function runTests() {
     assert.strictEqual(decodedLink3, originalText, "Base64 decoding must extract payload from hash parameters");
 
     console.log("✓ Robust Base64 Decoder validation PASSED");
+
+    // 10. StandardsValidator ESM Module Verification
+    console.log("\n10. Testing StandardsValidator ESM Module (Node Mocked Fetch)...");
+    await StandardsValidator.init("mocked-path://");
+    assert.ok(StandardsValidator.asContext, "AS2 context should be loaded");
+    assert.ok(StandardsValidator.schemaContext, "Schema.org context should be loaded");
+
+    // Test validation of valid ActivityStreams Create activity
+    StandardsValidator.validateActivityStreams({
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Create",
+      "object": {
+        "type": "Note",
+        "content": "Valid text"
+      }
+    }, "Create");
+
+    // Test validation failure on undefined context property
+    try {
+      StandardsValidator.validateActivityStreams({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Create",
+        "invalidJargonPropertyField": "should fail validation check"
+      }, "Create");
+      assert.fail("Should throw on undefined activitystreams property");
+    } catch (e) {
+      assert.ok(e.message.includes("is not defined in the imported standards context"), "Should complain about undefined property in error message");
+    }
+    console.log("✓ StandardsValidator ESM validation PASSED");
 
     console.log("\n==============================================");
     console.log("🎉 ALL holo-apps Architecture Validation Tests PASSED!");
