@@ -94,7 +94,7 @@ async function runLiveTest() {
     
     // 7. Verify Redirection to Workspace Canvas
     console.log("Waiting for redirection to workspace canvas...");
-    await page.waitForURL("**/index.html?id=*", { timeout: 15000 });
+    await page.waitForURL("**/playground.html?id=*", { timeout: 15000 });
     console.log("Successfully redirected to world canvas:", page.url());
     
     // 8. Verify <world-block> component renders and is successfully initialized

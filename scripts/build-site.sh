@@ -62,10 +62,11 @@ fi
 TMPDIR="$SITE_TMP" wasm-pack build "${wasm_pack_args[@]}" crates/holospaces-web --release --target web --out-dir web/pkg
 
 echo "build-site: assembling static site"
-cp -L crates/holospaces-web/web/index.html "$STAGE_DIR/"
+cp -L crates/holospaces-web/web/apps.html "$STAGE_DIR/index.html"
+cp -L crates/holospaces-web/web/apps.html "$STAGE_DIR/apps.html"
+cp -L crates/holospaces-web/web/index.html "$STAGE_DIR/playground.html"
 cp -L crates/holospaces-web/web/login.html "$STAGE_DIR/"
 cp -L crates/holospaces-web/web/worlds.html "$STAGE_DIR/"
-cp -L crates/holospaces-web/web/apps.html "$STAGE_DIR/"
 cp -L crates/holospaces-web/web/fixture.holo "$STAGE_DIR/"
 cp -L crates/holospaces-web/web/fixture-userland.wasm "$STAGE_DIR/"
 cp -rL crates/holospaces-web/web/assets "$STAGE_DIR/"
@@ -76,8 +77,28 @@ rm -f "$STAGE_DIR"/pkg/*.d.ts "$STAGE_DIR/pkg/package.json" "$STAGE_DIR/pkg/.git
 
 echo "build-site: patching static routing redirect paths in blocks"
 sed -i 's|window.location.href = "/worlds"|window.location.href = "worlds.html"|g' "$STAGE_DIR/blocks/login-block.html"
-sed -i 's|location.href = '\''/worlds/'\''|location.href = '\''./index.html?id='\''|g' "$STAGE_DIR/blocks/worlds-block.html"
+sed -i 's|location.href = '\''/worlds/'\''|location.href = '\''./playground.html?id='\''|g' "$STAGE_DIR/blocks/worlds-block.html"
 sed -i 's|await this.getWorlds()|await new Promise(r => setTimeout(r, 500)); await this.getWorlds()|g' "$STAGE_DIR/blocks/worlds-block.html"
+
+# Patch navbar-block.html to add Dashboard navigation button
+python3 -c '
+path = "'"$STAGE_DIR"'/blocks/navbar-block.html"
+with open(path, "r") as f:
+    content = f.read()
+target = """  <div class="square white" :class="{ active: spotlightOpen }" @click.stop="spotlightOpen = !spotlightOpen">
+    <img src="/assets/img/favicon.svg">
+  </div>"""
+replacement = """  <div class="square white" :class="{ active: spotlightOpen }" @click.stop="spotlightOpen = !spotlightOpen">
+    <img src="/assets/img/favicon.svg">
+  </div>
+  <div class="square" style="margin-left: 8px;" @click="window.location.href = '\''index.html'\''" title="Holo-Apps Dashboard">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+  </div>"""
+if target in content:
+    content = content.replace(target, replacement)
+    with open(path, "w") as f:
+        f.write(content)
+'
 
 # Patch worlds-block.html to use explicit worldHandle.change for initial state mapping to ensure storage save is triggered
 python3 -c '

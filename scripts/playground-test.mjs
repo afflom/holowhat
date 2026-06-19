@@ -129,9 +129,9 @@ server.listen(PORT, async () => {
     console.log("Clicking world card...");
     await worldCard.click();
     
-    // Verify redirect to the workspace canvas (index.html?id=...)
+    // Verify redirect to the workspace canvas (playground.html?id=...)
     console.log("Waiting for redirection to workspace canvas...");
-    await page.waitForURL("**/index.html?id=*", { timeout: 15000 });
+    await page.waitForURL("**/playground.html?id=*", { timeout: 15000 });
     console.log("Successfully redirected to world canvas:", page.url());
     
     // Verify that the world block element is present and successfully initialized (its shadow dom elements are present)
