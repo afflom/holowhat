@@ -149,7 +149,7 @@ Alpine.data("shell", () => {
       // Re-sign to finalize
       const payloadToSign = canonicalJson({ header: genesis.header, body: genesis.body });
       genesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, payloadToSign);
-      genesis.id = await sha256(canonicalJson({ header: genesis.header, body: genesis.body, signature: genesis.signature }));
+      genesis.id = await sha256(payloadToSign);
 
       const col = new Collection(genesis.id, messengerReducer);
       await col.addEvent(genesis);
