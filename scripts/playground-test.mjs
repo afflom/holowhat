@@ -136,7 +136,7 @@ server.listen(PORT, async () => {
     
     // Verify that the world block element is present and successfully initialized (its shadow dom elements are present)
     console.log("Verifying <world-block> component renders and initializes shadow root...");
-    const worldBlockWrapper = page.locator("world-block >> shadow=.world");
+    const worldBlockWrapper = page.locator("world-block >> .world");
     await worldBlockWrapper.waitFor({ timeout: 10000 });
     console.log("Success: <world-block> component and its shadow elements are successfully initialized!");
     
