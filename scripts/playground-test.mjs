@@ -71,10 +71,10 @@ server.listen(PORT, async () => {
       const type = dialog.type();
       console.log(`[Dialog] type: ${type}, message: ${message}`);
       if (type === "prompt") {
-        if (message.includes("Workspace Invite Code") || message.includes("Complete Backup Payload")) {
+        if (message.includes("Workspace Invite Code") || message.includes("Complete Account Backup Payload")) {
           lastPromptValue = dialog.defaultValue();
           await dialog.accept(lastPromptValue);
-        } else if (message.includes("Enter Member's Public Key")) {
+        } else if (message.includes("Enter Member's Account ID")) {
           await dialog.accept("04b3e295316af8b64f6a16027e08a2f81a69485586ef8156e4646839678fb9be239f62087ccd118f3973e3b6c5cc848deacde319eb4ac0cd3fac57d591aad14b5d");
         } else {
           await dialog.accept();
@@ -178,32 +178,32 @@ server.listen(PORT, async () => {
     await userBadge.click();
 
     console.log("Exporting identity backup payload...");
-    const exportBtn = page.locator(".dialog button:has-text('Export Identity Payload')");
+    const exportBtn = page.locator(".dialog button:has-text('Export Account Backup')");
     await exportBtn.waitFor({ timeout: 5000 });
     await exportBtn.click();
     console.log("Captured backup payload length:", lastPromptValue.length);
     const savedBackupPayload = lastPromptValue;
 
     console.log("Wiping session keys (logout)...");
-    const wipeBtn = page.locator(".dialog button:has-text('Wipe Session Keys')");
+    const wipeBtn = page.locator(".dialog button:has-text('Wipe Account Data')");
     await wipeBtn.waitFor({ timeout: 5000 });
     await wipeBtn.click();
 
     console.log("Waiting for overlay after logout/reload...");
-    const backupInput = page.locator("input[placeholder='Paste Backup Payload (Base64)']");
+    const backupInput = page.locator("input[placeholder='Paste Account Backup Payload']");
     await backupInput.waitFor({ timeout: 10000 });
     
     console.log("Importing the captured backup payload...");
     await backupInput.fill(savedBackupPayload);
-    const importBtn = page.locator("button:has-text('Import Identity')");
+    const importBtn = page.locator("button:has-text('Import Profile')");
     await importBtn.waitFor({ timeout: 5000 });
     await importBtn.click();
 
     // The overlay should disappear, let's wait for the workspace dashboard to load
     console.log("Verifying successful import and workspace dashboard load...");
-    const dashboardTitle = page.locator("h3:has-text('Sovereign Cryptographic Profile')");
+    const dashboardTitle = page.locator("h3:has-text('User Account & Security')");
     await dashboardTitle.waitFor({ timeout: 10000 });
-    console.log("Sovereign Cryptographic Profile is visible. Identity import verified!");
+    console.log("User Account & Security is visible. Account import verified!");
 
     // ----------------------------------------------------
     // Workspace & Join tests
@@ -324,11 +324,11 @@ server.listen(PORT, async () => {
     await contactAliasInput.waitFor({ timeout: 5000 });
     await contactAliasInput.fill("Alice Bee");
 
-    const contactPubkeyInput = page.locator("input[placeholder='Signing Public Key Address (κ)']");
+    const contactPubkeyInput = page.locator("input[placeholder='Account ID']");
     await contactPubkeyInput.waitFor({ timeout: 5000 });
     await contactPubkeyInput.fill("04c29455ef8469ab7d37c65271da2c03135b30ea0a8b2c993831341ac8b0d688c943f4dda806fe71dd7cc800c088e1e62d6baabe4ae9fdc54f67f8d1e858f94554");
 
-    const contactCurveInput = page.locator("input[placeholder='ECDH Exchange Public Key']");
+    const contactCurveInput = page.locator("input[placeholder='Message Encryption Key']");
     await contactCurveInput.waitFor({ timeout: 5000 });
     await contactCurveInput.fill("04bad0cdcd65d4efa7fd6fa458d6dc1e8d10796003d4f36877c3d14eb837617600fdb17750797385a26b603614b66e300ebc8df9eee732074d5e74896abc46a8b9");
 

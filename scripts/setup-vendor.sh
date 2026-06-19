@@ -91,5 +91,10 @@ cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/login-block.html" "$VENDOR_
 echo "setup-vendor: copying custom CSS..."
 cp -f "$ROOT/crates/holospaces-web/web/custom-css/apps.css" "$VENDOR_DIR/playground/public/assets/css/"
 
+# Copy standards schemas into web assets schemas directory
+echo "setup-vendor: copying standards schemas..."
+mkdir -p "$WEB_DIR/assets/schemas"
+cp -f "$ROOT/scripts/schemas"/* "$WEB_DIR/assets/schemas/"
+
 echo "setup-vendor: completed successfully."
 

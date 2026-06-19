@@ -3,12 +3,12 @@
   <template x-if="!participant">
     <div class="modal-overlay">
       <div class="modal-card">
-        <h3>Holo-Apps Platform Identity</h3>
-        <p class="desc">A self-sovereign participant identity is required to verify provenance (ADR-001/CC-1).</p>
-        <button class="action-btn" @click="generateKeys()">Generate Keys</button>
+        <h3>Holo-Apps User Profile</h3>
+        <p class="desc">A user profile is required to sign in and join workspaces.</p>
+        <button class="action-btn" @click="generateKeys()">Create Profile</button>
         <div style="margin: 16px 0; color: #64748b; font-size: 0.8rem;">or load existing</div>
-        <input type="text" x-model="importInput" placeholder="Paste Backup Payload (Base64)" style="width: 100%; padding: 10px; margin-bottom: 12px; background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.2); color: white; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 0.8rem;" />
-        <button class="action-btn" style="background: #475569;" @click="importKeys()">Import Identity</button>
+        <input type="text" x-model="importInput" placeholder="Paste Account Backup Payload" style="width: 100%; padding: 10px; margin-bottom: 12px; background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.2); color: white; border-radius: 6px; box-sizing: border-box; font-family: monospace; font-size: 0.8rem;" />
+        <button class="action-btn" style="background: #475569;" @click="importKeys()">Import Profile</button>
       </div>
     </div>
   </template>
@@ -68,7 +68,7 @@
           <span class="title-lbl" x-text="topBarTitle">Dashboard</span>
           <div class="user-pill" x-show="participant">
             <div class="green-dot"></div>
-            <span class="user-id" x-text="'Operator: ' + (participant ? participant.id.substring(0, 10) : '') + '...'"></span>
+            <span class="user-id" x-text="'User: ' + (participant ? participant.id.substring(0, 10) : '') + '...'"></span>
           </div>
         </div>
 
@@ -77,18 +77,18 @@
           <!-- Dashboard View -->
           <template x-if="activeTab === 'dashboard'">
             <div class="dashboard-view" style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
-              <h3 style="font-size: 1.2rem; font-weight: 700; color: white; margin: 0; display: block;">Sovereign Cryptographic Profile</h3>
+              <h3 style="font-size: 1.2rem; font-weight: 700; color: white; margin: 0; display: block;">User Account & Security</h3>
               <template x-if="activeWorkspace">
                 <div class="info-box">
                   <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 12px;">
                     <h4 style="margin: 0; font-size: 1rem; color: white;" x-text="'Workspace: ' + activeWorkspace.name"></h4>
                     <button class="action-btn" style="font-size: 0.75rem; padding: 4px 10px;" @click="exportActiveWorkspaceInvite()">Export Workspace Invite</button>
                   </div>
-                  <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px;">Workspace ID Address:</div>
+                  <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px;">Workspace ID:</div>
                   <code x-text="activeWorkspace.id"></code>
 
                   <div style="margin-top: 16px;">
-                    <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Workspace Member List:</div>
+                    <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Workspace Members:</div>
                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
                       <template x-for="mId in activeWorkspace.members" :key="mId">
                         <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
@@ -104,16 +104,16 @@
               </template>
 
               <div class="info-box">
-                <h4>Identity Address (κ)</h4>
+                <h4>User Account ID (Public)</h4>
                 <code x-text="participant ? participant.id : ''"></code>
               </div>
               <div class="info-box">
-                <h4>ECDH Exchange Address</h4>
+                <h4>Message Encryption Key</h4>
                 <code x-text="participant ? participant.curveId : ''"></code>
               </div>
               <div style="display: flex; gap: 12px; margin-top: 12px;">
-                <button class="action-btn" @click="exportIdentity()">Export Backup Payload</button>
-                <button class="action-btn" style="background: #ef4444;" @click="clearIdentity()">Logout / Clear</button>
+                <button class="action-btn" @click="exportIdentity()">Export Account Backup</button>
+                <button class="action-btn" style="background: #ef4444;" @click="clearIdentity()">Logout / Wipe Account Data</button>
               </div>
             </div>
           </template>
@@ -124,7 +124,7 @@
               <template x-for="app in indexApps">
                 <div class="store-card">
                   <div class="card-name" x-text="app.name">App Name</div>
-                  <div class="card-desc">Coordination-free client-side chat app. All messages are encrypted under rotated epoch keys.</div>
+                  <div class="card-desc">Fast client-side chat application with secure message encryption.</div>
                   <button class="action-btn" @click="installApp(app)" x-text="isInstalled(app.id) ? 'Installed' : 'Install'"></button>
                 </div>
               </template>
@@ -152,7 +152,7 @@
               <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                   <h4 style="margin: 0; font-size: 1rem; color: white;">Contacts Directory</h4>
-                  <button class="action-btn" style="font-size: 0.75rem;" @click="newContactId = prompt('Enter public key κ:'); newContactCurveId = prompt('Enter exchange key:'); newContactAlias = prompt('Enter alias:'); createContact()">Add Contact Manually</button>
+                  <button class="action-btn" style="font-size: 0.75rem;" @click="newContactId = prompt('Enter Account ID:'); newContactCurveId = prompt('Enter Message Encryption Key:'); newContactAlias = prompt('Enter alias:'); createContact()">Add Contact Manually</button>
                 </div>
                 
                 <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -161,9 +161,9 @@
                       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
                           <div style="font-weight: bold; color: white;" x-text="c.name"></div>
-                          <code style="font-size: 0.75rem; color: #94a3b8;" x-text="'κ: ' + c.id"></code>
+                          <code style="font-size: 0.75rem; color: #94a3b8;" x-text="'User ID: ' + c.id"></code>
                           <br/>
-                          <code style="font-size: 0.75rem; color: #94a3b8;" x-text="'ECDH: ' + c.curveId"></code>
+                          <code style="font-size: 0.75rem; color: #94a3b8;" x-text="'Encryption Key: ' + c.curveId"></code>
                         </div>
                         <template x-if="c.id !== (participant ? participant.id : '')">
                           <button class="action-btn" style="background: #ef4444; padding: 2px 6px; font-size: 0.7rem;" @click="deleteContact(c.id)">Delete</button>
@@ -647,7 +647,7 @@
 
     async addMemberToActiveWorkspace() {
       if (!this.activeWorkspace) return;
-      const memberId = prompt("Enter Member's Public Key (κ):");
+      const memberId = prompt("Enter Member's Account ID:");
       if (!memberId) return;
 
       const wsCol = this.activeWorkspace.collection;
@@ -854,10 +854,10 @@
         
         await this.onIdentityReady();
         
-        alert("Identity imported successfully!");
+        alert("Account imported successfully!");
       } catch (e) {
         console.error(e);
-        alert("Failed to import identity. Ensure you pasted a valid Backup Payload.");
+        alert("Failed to import account. Ensure you pasted a valid Account Backup Payload.");
       }
     },
 
@@ -865,15 +865,15 @@
       try {
         const jwkObj = await this.participant.exportJwk();
         const serialized = base64Encode(JSON.stringify(jwkObj));
-        prompt("Copy this Complete Backup Payload (Base64-encoded JWKs):", serialized);
+        prompt("Copy this Complete Account Backup Payload:", serialized);
       } catch (e) {
         console.error(e);
-        alert("Failed to export identity.");
+        alert("Failed to export account.");
       }
     },
 
     clearIdentity() {
-      if (confirm("Are you sure you want to log out and clear your identity from this browser? Make sure you backed up your keys!")) {
+      if (confirm("Are you sure you want to log out and clear your account from this browser? Make sure you backed up your account payload!")) {
         localStorage.removeItem("holoapps_participant_jwk");
         localStorage.removeItem("holoapps_identity_key");
         localStorage.removeItem("holoapps_curve_key");

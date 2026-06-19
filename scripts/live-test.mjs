@@ -108,14 +108,14 @@ async function runLiveTest() {
     await page.goto(`${LIVE_URL}/apps.html`, { waitUntil: "networkidle" });
     
     // Check if sign-in button exists and click it
-    console.log("Clicking 'Generate New Identity Keypair' button...");
-    const genIdentityBtn = page.locator("button:has-text('Generate New Identity Keypair')");
+    console.log("Clicking 'Create Profile' button...");
+    const genIdentityBtn = page.locator("button:has-text('Create Profile')");
     await genIdentityBtn.waitFor({ timeout: 5000 });
     await genIdentityBtn.click();
     
     // Verify Dashboard view
-    console.log("Verifying Sovereign Cryptographic Profile is displayed...");
-    const profileHdr = page.locator("h3:has-text('Sovereign Cryptographic Profile')");
+    console.log("Verifying User Account & Security is displayed...");
+    const profileHdr = page.locator("h3:has-text('User Account & Security')");
     await profileHdr.waitFor({ timeout: 5000 });
     
     // Create new channel
