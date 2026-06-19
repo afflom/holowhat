@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: pages-production
@@ -45,7 +47,16 @@ jobs:
           chmod +x scripts/build-site.sh
           ./scripts/build-site.sh
 
-      - name: Deploy to the gh-pages root (production)
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages (Actions Workflow)
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Deploy to the gh-pages root (Legacy Branch compatibility)
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: _site
