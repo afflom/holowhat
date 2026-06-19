@@ -102,6 +102,38 @@ if target in content:
         f.write(content)
 '
 
+echo "build-site: patching absolute paths to relative in all HTML and JS files"
+python3 -c '
+import os, re
+stage_dir = "'"$STAGE_DIR"'"
+replacements = [
+    (re.compile(r"\"/assets/"), "\"assets/"),
+    (re.compile(r"'\''/assets/"), "'\''assets/"),
+    (re.compile(r"url\(\"/assets/"), "url(\"assets/"),
+    (re.compile(r"url\('\''/assets/"), "url('\''assets/"),
+    (re.compile(r"\"/blocks/"), "\"blocks/"),
+    (re.compile(r"'\''/blocks/"), "'\''blocks/"),
+    (re.compile(r"\"/utils/"), "\"utils/"),
+    (re.compile(r"'\''/utils/"), "'\''utils/"),
+    (re.compile(r"\"/pkg/"), "\"pkg/"),
+    (re.compile(r"'\''/pkg/"), "'\''pkg/"),
+    (re.compile(r"\.\./\.\./\.\./pkg/"), "../../pkg/"),
+]
+
+for root, dirs, files in os.walk(stage_dir):
+    for file in files:
+        if file.endswith((".html", ".js")):
+            path = os.path.join(root, file)
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            original = content
+            for pattern, repl in replacements:
+                content = pattern.sub(repl, content)
+            if content != original:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                print(f"Patched paths in: {os.path.relpath(path, stage_dir)}")
+'
 
 if [ -e "$FINAL_SITE_DIR" ]; then
     mv "$FINAL_SITE_DIR" "$BACKUP_DIR"
