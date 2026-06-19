@@ -1,0 +1,84 @@
+{
+  "name": "holospaces",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+  },
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "holospaces site",
+      "onAutoForward": "openBrowser",
+      "protocol": "http",
+      "visibility": "public",
+    },
+  },
+  "features": {
+    // Substrate / peers toolchain (Lean + wasm; Rust is installed in the
+    // Dockerfile, see the note there about the Rust feature + CodeLLDB).
+    "ghcr.io/guiyomh/features/just:0": {},
+    "ghcr.io/lumenpink/devcontainer-features/wasm-pack:0": {},
+    // Documentation pipeline runtimes
+    "ghcr.io/devcontainers/features/ruby:1": {
+      "version": "3.3",
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts",
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/dirien/devcontainer-feature-codex/codex:0": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "llvm-vs-code-extensions.lldb-dap",
+        "anthropic.claude-code",
+        "leanprover.lean4",
+        "asciidoctor.asciidoctor-vscode",
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer",
+        },
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.procMacro.enable": true,
+        "rust-analyzer.cargo.allFeatures": true,
+
+        "lldb-dap.executable-path": "/usr/bin/lldb-dap",
+
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/usr/bin/zsh",
+          },
+        },
+        "search.exclude": {
+          "**/target": true,
+          "**/docs/vendor": true,
+        },
+        "files.watcherExclude": {
+          "**/target/**": true,
+          "**/docs/vendor/**": true,
+        },
+      },
+    },
+  },
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind,consistency=cached",
+  ],
+  "remoteEnv": {
+    "PATH": "/home/vscode/.elan/bin:/usr/local/cargo/bin:${containerEnv:PATH}",
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+    "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
+    "HOLOSPACES_GIT_USER_NAME": "${localEnv:HOLOSPACES_GIT_USER_NAME}",
+    "HOLOSPACES_GIT_USER_EMAIL": "${localEnv:HOLOSPACES_GIT_USER_EMAIL}",
+    "HOST_GIT_AUTHOR_NAME": "${localEnv:GIT_AUTHOR_NAME}",
+    "HOST_GIT_AUTHOR_EMAIL": "${localEnv:GIT_AUTHOR_EMAIL}",
+    "HOST_GIT_COMMITTER_NAME": "${localEnv:GIT_COMMITTER_NAME}",
+    "HOST_GIT_COMMITTER_EMAIL": "${localEnv:GIT_COMMITTER_EMAIL}",
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+}

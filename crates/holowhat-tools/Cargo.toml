@@ -1,0 +1,12 @@
+[package]
+name = "holowhat-tools"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+holospaces = { path = "../../vendor/holospaces/crates/holospaces" }
+hologram-compiler = { git = "https://github.com/Hologram-Technologies/hologram", rev = "18f553d8578997ce32e7b653786a0bcf9b09a2c0", package = "hologram-compiler" }
+hologram-graph = { git = "https://github.com/Hologram-Technologies/hologram", rev = "18f553d8578997ce32e7b653786a0bcf9b09a2c0", package = "hologram-graph" }
+prism = { version = "0.4", package = "uor-prism" }
+smallvec = "1"
+wat = "1"

@@ -1,0 +1,69 @@
+name: CI
+
+# Strict Code Quality & Verification Pipeline for Workspace Crates.
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify Code Quality & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup vendor dependencies
+        run: |
+          chmod +x scripts/setup-vendor.sh
+          ./scripts/setup-vendor.sh
+
+      - name: Check code format
+        run: cargo fmt --check
+
+      - name: Run clippy lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run workspace tests
+        run: cargo test --workspace
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Build and assemble site
+        run: |
+          chmod +x scripts/build-site.sh
+          ./scripts/build-site.sh
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright
+        run: |
+          cd crates/holospaces-web/web
+          npm install
+          npx --yes playwright install --with-deps chromium chromium-headless-shell
+
+      - name: Run Playwright E2E test
+        run: |
+          cd crates/holospaces-web/web
+          node ../../../scripts/playground-test.mjs
+
+
