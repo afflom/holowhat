@@ -67,29 +67,13 @@ server.listen(PORT, async () => {
     alicePage.on("console", msg => console.log(`ALICE BROWSER:`, msg.text()));
     bobPage.on("console", msg => console.log(`BOB BROWSER:`, msg.text()));
 
-    // 1. Go to login pages
+    // 1. Go to login pages (redirects automatically to worlds)
     console.log("Navigating Alice to login...");
     await alicePage.goto(`http://localhost:${PORT}/login.html`, { waitUntil: "networkidle" });
+    await alicePage.waitForURL("**/worlds.html", { timeout: 15000 });
     
     console.log("Navigating Bob to login...");
     await bobPage.goto(`http://localhost:${PORT}/login.html`, { waitUntil: "networkidle" });
-
-    // 2. Continue local-first to enter the world selection
-    console.log("Entering World Selector on both pages...");
-    const aliceStart = alicePage.locator("button.nav-login-button").first();
-    await aliceStart.waitFor({ timeout: 25000 });
-    await aliceStart.click();
-    const aliceLocal = alicePage.locator("button.local-btn");
-    await aliceLocal.waitFor({ timeout: 15000 });
-    await aliceLocal.click();
-    await alicePage.waitForURL("**/worlds.html", { timeout: 15000 });
-
-    const bobStart = bobPage.locator("button.nav-login-button").first();
-    await bobStart.waitFor({ timeout: 25000 });
-    await bobStart.click();
-    const bobLocal = bobPage.locator("button.local-btn");
-    await bobLocal.waitFor({ timeout: 15000 });
-    await bobLocal.click();
     await bobPage.waitForURL("**/worlds.html", { timeout: 15000 });
 
     // 3. Alice creates a World
