@@ -254,6 +254,17 @@ async function bootstrapPresets() {
   const defaultPkgId = "3JmVZBuZJrg6HK6kr9m9KRuZebxA";
   const defaultWorldId = "2RsvqRvmUqCmxPhEbdXtwW4qsdFm";
   
+  const bootstrapVersion = "2026-06-19-v2";
+  const savedVersion = localStorage.getItem("hs-pkg-bootstrap-ver");
+  if (savedVersion !== bootstrapVersion) {
+    localStorage.removeItem("hs-doc-kappa:document/" + defaultPkgId);
+    localStorage.removeItem("hs-doc-data:document/" + defaultPkgId);
+    localStorage.removeItem("hs-doc-kappa:" + defaultPkgId);
+    localStorage.removeItem("hs-doc-data:" + defaultPkgId);
+    localStorage.removeItem("hs-doc-data:" + defaultPkgId + "/snapshot/bootstrap");
+    localStorage.setItem("hs-pkg-bootstrap-ver", bootstrapVersion);
+  }
+  
   // Bootstrap Default Packages Document (containing standard Alpine Blocks)
   let pkgExists = localStorage.getItem("hs-doc-kappa:document/" + defaultPkgId) ||
                   localStorage.getItem("hs-doc-data:document/" + defaultPkgId) ||
