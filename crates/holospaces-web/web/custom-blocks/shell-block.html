@@ -465,7 +465,7 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;
@@ -531,7 +531,7 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;
@@ -597,7 +597,7 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": name,
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;

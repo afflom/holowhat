@@ -117,6 +117,14 @@ Alpine.data("shell", () => {
           console.error("Failed to restore identity:", e);
         }
       }
+
+      // Warm up StandardsValidator context schemas
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        await StandardsValidator.init();
+      } catch (e) {
+        console.error("Failed to initialize StandardsValidator context in apps.js:", e);
+      }
     },
 
     async onIdentityReady() {
@@ -350,7 +358,7 @@ Alpine.data("shell", () => {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;
@@ -415,9 +423,19 @@ Alpine.data("shell", () => {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(genChanGenesis.body.payload || genChanGenesis.body.cleartext, "Conversation");
+      } catch (err) {
+        console.error("Standards compliance check failed on general channel genesis:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
+
       genChanGenesis.header.collection = genChanGenesis.id;
       const genSignPayload = canonicalJson({ header: genChanGenesis.header, body: genChanGenesis.body });
       genChanGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, genSignPayload);
@@ -440,6 +458,15 @@ Alpine.data("shell", () => {
           "members": [this.participant.id]
         }
       }, this.participant);
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(wsGenesis.body.payload || wsGenesis.body.cleartext, "Group");
+      } catch (err) {
+        console.error("Standards compliance check failed on workspace genesis:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
       wsGenesis.header.collection = wsGenesis.id;
       const wsSignPayload = canonicalJson({ header: wsGenesis.header, body: wsGenesis.body });
       wsGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, wsSignPayload);
@@ -482,9 +509,18 @@ Alpine.data("shell", () => {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": this.newChannelName,
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(genChanGenesis.body.payload || genChanGenesis.body.cleartext, "Conversation");
+      } catch (err) {
+        console.error("Standards compliance check failed on custom channel genesis:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
       genChanGenesis.header.collection = genChanGenesis.id;
       const genSignPayload = canonicalJson({ header: genChanGenesis.header, body: genChanGenesis.body });
       genChanGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, genSignPayload);
@@ -521,6 +557,15 @@ Alpine.data("shell", () => {
           }
         }
       }, this.participant);
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(addEvent.body.payload || addEvent.body.cleartext, "Add");
+      } catch (err) {
+        console.error("Standards compliance check failed on add channel event:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
 
       await wsCol.addEvent(addEvent);
       this.saveEventToStorage(addEvent);
@@ -565,6 +610,15 @@ Alpine.data("shell", () => {
           }
         }
       }, this.participant);
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(addEvent.body.payload || addEvent.body.cleartext, "Add");
+      } catch (err) {
+        console.error("Standards compliance check failed on add member event:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
 
       await wsCol.addEvent(addEvent);
       this.saveEventToStorage(addEvent);

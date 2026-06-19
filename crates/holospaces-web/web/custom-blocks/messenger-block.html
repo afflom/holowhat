@@ -422,7 +422,7 @@
         const kind = ev.header.kind;
         const author = ev.header.author;
         const clock = ev.header.clock;
-        const timestamp = ev.body.payload?.timestamp || ev.header.clock * 1000 + 1771180000000;
+        const timestamp = (ev.body.payload?.published ? new Date(ev.body.payload.published).getTime() : null) || ev.body.payload?.timestamp || ev.header.clock * 1000 + 1771180000000;
         
         if (kind === "genesis") {
           systemItems.push({
@@ -576,10 +576,7 @@
           "type": "Note",
           "content": this.text,
           "published": new Date().toISOString()
-        },
-        // Fallbacks
-        "body": this.text,
-        "timestamp": Date.now()
+        }
       };
 
       if (this.replyingTo) {
@@ -661,10 +658,7 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Like",
           "object": msg.id,
-          "content": symbol,
-          // Fallbacks
-          "target": msg.id,
-          "symbol": symbol
+          "content": symbol
         }
       }, p);
 
@@ -718,10 +712,7 @@
             "type": "Note",
             "id": this.editing.id,
             "content": this.editText
-          },
-          // Fallbacks
-          "target": this.editing.id,
-          "body": this.editText
+          }
         }
       }, p);
 
