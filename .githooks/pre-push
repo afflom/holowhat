@@ -1,0 +1,27 @@
+#!/bin/sh
+# Git pre-push hook to validate the app before pushing to remote.
+
+echo "=============================================="
+echo "🚀 Running pre-push verification tests..."
+echo "=============================================="
+
+# Run the test suite from the repository root
+npm test
+TEST_EXIT_CODE=$?
+
+if [ $TEST_EXIT_CODE -ne 0 ]; then
+  echo "=============================================="
+  echo "❌ Push aborted: The test suite failed."
+  echo "Please fix all errors and warnings before pushing."
+  echo "=============================================="
+  exit $TEST_EXIT_CODE
+fi
+
+echo "=============================================="
+echo "✓ Pre-push verification passed successfully."
+echo "=============================================="
+
+# Run Git LFS pre-push check if available.
+if command -v git-lfs >/dev/null 2>&1; then
+  git lfs pre-push "$@"
+fi

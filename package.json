@@ -4,5 +4,9 @@
   "type": "module",
   "dependencies": {
     "playwright": "^1.49.0"
+  },
+  "scripts": {
+    "test": "bash -c 'source \"$HOME/.cargo/env\" && ./scripts/setup-vendor.sh && ./scripts/build-site.sh && node scripts/playground-test.mjs'",
+    "prepare": "git config core.hooksPath .githooks"
   }
 }
