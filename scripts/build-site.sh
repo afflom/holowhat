@@ -74,6 +74,8 @@ cp -rL crates/holospaces-web/web/blocks "$STAGE_DIR/"
 cp -rL crates/holospaces-web/web/utils "$STAGE_DIR/"
 cp -rL crates/holospaces-web/web/pkg "$STAGE_DIR/pkg"
 rm -f "$STAGE_DIR"/pkg/*.d.ts "$STAGE_DIR/pkg/package.json" "$STAGE_DIR/pkg/.gitignore"
+mkdir -p "$STAGE_DIR/assets/schemas"
+cp -rL scripts/schemas/* "$STAGE_DIR/assets/schemas/"
 
 echo "build-site: patching static routing redirect paths in blocks"
 sed -i 's|window.location.href = "/worlds"|window.location.href = "worlds.html"|g' "$STAGE_DIR/blocks/login-block.html"
