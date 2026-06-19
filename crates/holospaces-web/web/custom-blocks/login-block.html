@@ -1,0 +1,382 @@
+<div class="wrapper">
+  <div
+    x-show="showAbout"
+    x-transition.opacity=""
+    class="overlay"
+    @click="showAbout = false; unlockScroll($el);"
+    x-ref="aboutModal"
+  >
+    <div @click.stop="" class="card">
+      <about-page-block></about-page-block>
+    </div>
+  </div>
+  <div
+    x-show="showLogin"
+    x-transition.opacity=""
+    class="overlay"
+    @click="showLogin = false; unlockScroll($el);"
+    x-ref="loginModal"
+  >
+    <div @click.stop="" class="card login-card">
+      <!-- Local-first/offline option -->
+      <flex-block :style="{ flexDirection: 'column', alignItems: 'center', width: '100%' }">
+        <img class="logo" src="/assets/img/favicon.svg" />
+        <h1>Playground</h1>
+        
+        <!-- Active Identity Status -->
+        <div style="margin-top: 16px; margin-bottom: 8px; width: 100%; text-align: center;">
+          <template x-if="hasIdentity">
+            <div style="background: rgba(44, 191, 94, 0.1); border: 1px solid rgba(44, 191, 94, 0.3); padding: 8px; border-radius: 6px; font-size: 0.9rem; color: #2cbf5e;">
+              Active Identity Loaded: <br/>
+              <code style="font-family: monospace; font-size: 0.8rem; word-break: break-all;" x-text="identityAbbr"></code>
+            </div>
+          </template>
+          <template x-if="!hasIdentity">
+            <div style="background: rgba(114, 137, 218, 0.1); border: 1px solid rgba(114, 137, 218, 0.3); padding: 8px; border-radius: 6px; font-size: 0.9rem; color: #7289da;">
+              No local identity found. A new secure P-256 keypair will be generated in your browser.
+            </div>
+          </template>
+        </div>
+
+        <button class="local-btn" @click="localLogin">
+          Continue Local-First
+        </button>
+        <div class="local-desc">
+          Your data is stored locally. No sign up required.
+        </div>
+      </flex-block>
+
+      <!-- Import Identity Section -->
+      <hr class="divider" />
+      <flex-block :style="{ flexDirection: 'column', width: '100%', gap: '8px' }">
+        <div style="font-size: 0.9rem; font-weight: bold; color: #555;">Import Identity Backup</div>
+        <input
+          x-model="importInput"
+          placeholder="Paste Backup Payload (Base64)"
+          style="font-size: 0.9rem !important;"
+        />
+        <button
+          class="login-button"
+          @click="importKeys"
+          :disabled="!importInput"
+          style="background: #7289da; color: white;"
+        >Import Identity</button>
+        <div class="messages">
+          <div class="error" x-text="errorMessage"></div>
+          <div class="success" x-text="successMessage"></div>
+        </div>
+      </flex-block>
+    </div>
+  </div>
+
+  <nav>
+    <button
+      class="nav-about-button"
+      @click="showAbout = true; lockScroll($refs.aboutModal);"
+    >
+      About
+    </button>
+    <button
+      class="nav-login-button"
+      @click="showLogin = true; lockScroll($refs.loginModal);"
+    >
+      Start building
+    </button>
+  </nav>
+
+  <home-page-block></home-page-block>
+  <br /><br />
+  <button
+    class="nav-login-button"
+    @click="showLogin = true; lockScroll($refs.loginModal);"
+  >
+    Start building
+  </button>
+</div>
+
+<script type="module">
+  import {
+    enableBodyScroll,
+    disableBodyScroll,
+  } from "https://esm.sh/body-scroll-lock@4.0.0-beta.0"
+
+  const origin = window.location.origin
+  const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : ""
+  const { Participant, base64Decode } = await import(`${origin}${base}/assets/scripts/holo-apps.js`)
+
+  export default {
+    mixins: [],
+    showLogin: false,
+    showAbout: false,
+    hasIdentity: false,
+    identityAbbr: "",
+    importInput: "",
+    errorMessage: "",
+    successMessage: "",
+    lockScroll: disableBodyScroll,
+    unlockScroll: enableBodyScroll,
+    async init() {
+      const savedJwk = localStorage.getItem("holoapps_participant_jwk")
+      const savedId = localStorage.getItem("holoapps_identity_key")
+      if (savedJwk && savedId) {
+        this.hasIdentity = true
+        this.identityAbbr = savedId.substring(0, 16) + "..."
+        // Automatically proceed if identity from Holo-Apps exists
+        this.localLogin()
+      }
+    },
+    async localLogin() {
+      this.errorMessage = ""
+      this.successMessage = ""
+      
+      // 1. Generate keys if not present
+      let savedJwk = localStorage.getItem("holoapps_participant_jwk")
+      if (!savedJwk) {
+        try {
+          const p = await Participant.create()
+          const jwk = await p.exportJwk()
+          localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwk))
+          localStorage.setItem("holoapps_identity_key", p.id)
+          localStorage.setItem("holoapps_curve_key", p.curveId)
+          this.hasIdentity = true
+          this.identityAbbr = p.id.substring(0, 16) + "..."
+          console.log("Generated login-block identity:", p.id)
+        } catch (e) {
+          console.error("Failed to generate identity:", e)
+          this.errorMessage = "Failed to generate keys locally."
+          return
+        }
+      }
+
+      // 2. Playwright session local storage sync (repo setup)
+      const user = localStorage.getItem("user")
+      if (!user) {
+        const userHandle = await repo.create({
+          worlds: [],
+        })
+        localStorage.setItem("user", userHandle.documentId)
+      }
+
+      await fetch("/api/auth/set-session", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: "local",
+          refresh_token: "local",
+          expires_at: "local", // unix seconds
+        }),
+      })
+
+      setTimeout(() => {
+        window.location.href = "/worlds"
+      }, 1000)
+    },
+    async importKeys() {
+      if (!this.importInput) return
+      this.errorMessage = ""
+      this.successMessage = ""
+      try {
+        const jwkObj = JSON.parse(base64Decode(this.importInput.trim()))
+        const p = await Participant.importJwk(jwkObj)
+        localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwkObj))
+        localStorage.setItem("holoapps_identity_key", p.id)
+        localStorage.setItem("holoapps_curve_key", p.curveId)
+        this.hasIdentity = true
+        this.identityAbbr = p.id.substring(0, 16) + "..."
+        this.successMessage = "Identity imported successfully!"
+        this.importInput = ""
+      } catch (e) {
+        console.error(e)
+        this.errorMessage = "Failed to import. Check format."
+      }
+    }
+  }
+</script>
+
+<style>
+  .wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    position: relative;
+    background: #efefef;
+
+    width: 100%;
+    height: 100%;
+
+    padding-bottom: 240px;
+  }
+
+  nav {
+    padding: 12px;
+    display: flex;
+    justify-content: flex-end;
+    align-self: stretch;
+  }
+
+  .nav-about-button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: white;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 1.2rem;
+    letter-spacing: 0.05rem;
+    margin-right: 12px;
+  }
+
+  .nav-login-button:hover {
+    opacity: 0.8;
+  }
+
+  .nav-login-button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    color: white;
+    background: #7289da;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 1.2rem;
+    letter-spacing: 0.05rem;
+  }
+
+  .nav-login-button:hover {
+    opacity: 0.8;
+  }
+
+  .overlay {
+    z-index: 1;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  input {
+    font-family: inherit;
+    font-size: 1.2rem !important;
+  }
+
+  .messages {
+    margin-top: 4px;
+    position: relative;
+    height: 32px;
+    line-height: 1;
+  }
+
+  .error {
+    position: absolute;
+    color: #f94b5a;
+    font-size: 1.25rem !important;
+  }
+
+  .success {
+    position: absolute;
+    color: #2cbf5e;
+    font-size: 1.25rem !important;
+  }
+
+  h1 {
+    margin: 0;
+  }
+
+  .logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .card-login {
+    max-width: 320px;
+    margin-top: -200px;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: white;
+    border-radius: 4px;
+    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+    padding: 24px;
+    font-size: 1rem;
+  }
+
+  .card div,
+  .card span {
+    font-size: 1.125rem;
+  }
+
+  input {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+    padding: 4px 8px;
+  }
+
+  .login-button {
+    cursor: pointer;
+    color: white;
+    width: 100%;
+    border: 0;
+    border-radius: 4px;
+    padding: 8px 0;
+    font-size: 1.25rem !important;
+    font-family: inherit;
+    background: #f5f6fa;
+    color: black;
+
+    border: 1px solid #bfc9d8;
+    border-radius: 4px;
+  }
+
+  .login-button:active {
+    opacity: 0.9;
+  }
+
+  span {
+    color: #708ad8;
+    cursor: pointer;
+  }
+
+  .divider {
+    width: calc(100% - 40px);
+    border-top: 0.5px solid #eee;
+  }
+
+  .local-btn {
+    border-radius: 4px;
+    border: none;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    background: var(--blue);
+    padding: 12px 0;
+    width: 100%;
+    font-size: 1.2rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+    color: white;
+  }
+  .local-btn:active {
+    background: #e0e0e0;
+  }
+  .local-desc {
+    font-size: 0.95rem;
+    color: #888;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    text-align: center;
+  }
+
+  @media (max-width: 1024px) {
+    .card {
+      margin-top: 0;
+    }
+  }
+</style>

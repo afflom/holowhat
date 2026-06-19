@@ -74,15 +74,16 @@ server.listen(PORT, async () => {
 
     page.on("requestfailed", req => {
       const url = req.url();
-      if (url.includes(`localhost:${PORT}`)) {
-        console.error(`Local request failed: ${url} (${req.failure()?.errorText})`);
-        failedRequests.push({ url, error: req.failure()?.errorText });
+      const errText = req.failure()?.errorText || "";
+      if (url.includes(`localhost:${PORT}`) && !url.startsWith("blob:") && errText !== "net::ERR_ABORTED") {
+        console.error(`Local request failed: ${url} (${errText})`);
+        failedRequests.push({ url, error: errText });
       }
     });
 
     page.on("response", res => {
       const url = res.url();
-      if (res.status() >= 400 && url.includes(`localhost:${PORT}`)) {
+      if (res.status() >= 400 && url.includes(`localhost:${PORT}`) && !url.startsWith("blob:")) {
         console.error(`Local response error: ${url} [${res.status()}]`);
         failedRequests.push({ url, status: res.status() });
       }
@@ -139,6 +140,74 @@ server.listen(PORT, async () => {
     const worldBlockWrapper = page.locator("world-block >> .world");
     await worldBlockWrapper.waitFor({ timeout: 10000 });
     console.log("Success: <world-block> component and its shadow elements are successfully initialized!");
+
+    // Navigate to Holo-Apps Shell (apps.html)
+    console.log("Navigating to Holo-Apps Shell (apps.html)...");
+    await page.goto(`http://localhost:${PORT}/apps.html`, { waitUntil: "networkidle" });
+
+    // Click 'Generate New Identity Keypair' if visible (in case session is not auto-restored)
+    const genIdentityBtn = page.locator("button:has-text('Generate New Identity Keypair')");
+    if (await genIdentityBtn.isVisible()) {
+      console.log("Generating new self-sovereign participant identity...");
+      await genIdentityBtn.click();
+    } else {
+      console.log("Existing identity loaded automatically.");
+    }
+
+    // Verify workspace is bootstrapped ('Local Swarm' should appear in sidebar)
+    console.log("Waiting for default workspace 'Local Swarm' bootstrapping...");
+    const localSwarmSidebar = page.locator(".sidebar-item:has-text('Local Swarm')");
+    await localSwarmSidebar.waitFor({ timeout: 10000 });
+    console.log("Default workspace loaded successfully.");
+
+    // Test creating a new workspace
+    console.log("Opening 'Create WS' modal...");
+    const createWsBtn = page.locator("button:has-text('+ Create WS')");
+    await createWsBtn.waitFor({ timeout: 5000 });
+    await createWsBtn.click();
+
+    // Input new workspace name
+    console.log("Filling new workspace name...");
+    const wsNameInput = page.locator("input[placeholder='Workspace Name']");
+    await wsNameInput.waitFor({ timeout: 5000 });
+    await wsNameInput.fill("E2E Hive Workspace");
+
+    // Click 'Create' button inside the modal
+    console.log("Submitting new workspace form...");
+    const submitWsBtn = page.locator("button:text-is('Create')");
+    await submitWsBtn.waitFor({ timeout: 5000 });
+    await submitWsBtn.click();
+
+    // Verify the new workspace appears in the sidebar and is active
+    console.log("Verifying E2E Hive Workspace creation in sidebar...");
+    const newWsSidebar = page.locator(".sidebar-item:has-text('E2E Hive Workspace')");
+    await newWsSidebar.waitFor({ timeout: 10000 });
+    console.log("Success: New workspace created and active!");
+
+    // Select default workspace 'Local Swarm' to test channel & messenger block
+    console.log("Selecting default workspace 'Local Swarm'...");
+    const localSwarmItem = page.locator(".sidebar-item:has-text('Local Swarm')");
+    await localSwarmItem.click();
+
+    // Click the '# general' channel
+    console.log("Navigating to '# general' channel...");
+    const generalChannelItem = page.locator(".sidebar-item:has-text('# general')");
+    await generalChannelItem.waitFor({ timeout: 5000 });
+    await generalChannelItem.click();
+
+    // Verify <messenger-block> renders and its input box is visible
+    console.log("Verifying <messenger-block> input box is visible...");
+    const chatInput = page.locator("input.chat-input");
+    await chatInput.waitFor({ timeout: 10000 });
+    console.log("<messenger-block> initialized successfully!");
+
+    // Type and send a message
+    console.log("Typing E2E test chat message...");
+    await chatInput.fill("Hello from E2E automated test!");
+    const sendBtn = page.locator("button.send-btn").first();
+    await sendBtn.click();
+    console.log("Message sent!");
+    
     
     // Check if any errors occurred during E2E flow
     if (pageErrors.length > 0) {

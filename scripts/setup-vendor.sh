@@ -85,6 +85,7 @@ done
 echo "setup-vendor: copying custom blocks..."
 cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/shell-block.html" "$VENDOR_DIR/playground/blocks/"
 cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/messenger-block.html" "$VENDOR_DIR/playground/blocks/"
+cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/login-block.html" "$VENDOR_DIR/playground/blocks/"
 
 # Copy custom CSS into Playground public assets CSS directory
 echo "setup-vendor: copying custom CSS..."

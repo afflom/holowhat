@@ -3,6 +3,10 @@ import { Participant, Event, Collection, App, AppIndex, Shell, canonicalJson, sh
 import { messengerReducer, createMessengerApp } from "./holo-messenger.js";
 import init, { Console, WebRtcLink } from "../../../pkg/holospaces_web.js";
 
+// Initialize globals for custom SFC blocks (e.g. messenger-block)
+window.Alpine = Alpine;
+window.handle = null;
+
 // Initialize Substrate WebAssembly
 await init();
 const console0 = new Console();
@@ -10,11 +14,13 @@ console.log("Substrate console active in Holo-Apps Shell");
 
 export function workspaceReducer(events) {
   const state = { name: "", channels: [], members: [] };
+  if (!events || !Array.isArray(events)) return state;
   for (const ev of events) {
-    const payload = ev.payload || (ev.body ? ev.body.payload : {}) || {};
+    if (!ev) continue;
+    const payload = ev.payload || (ev.body ? ev.body.payload : null) || ev.body?.cleartext || {};
     const type = payload.type || "";
-    const eventKind = ev.kind || (ev.header ? ev.header.kind : "");
-    const author = ev.author || (ev.header ? ev.header.author : "");
+    const eventKind = ev.kind || ev.header?.kind || "";
+    const author = ev.author || ev.header?.author || "";
     
     if (eventKind === "genesis" || type === "Group") {
       state.name = payload.name || "Unnamed Workspace";
