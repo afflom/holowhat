@@ -1,6 +1,6 @@
 <div @click.stop="" @click.outside="spotlightOpen = false" class="wrapper">
   <div class="search">
-    <img src="/assets/img/search.svg" /><input autofocus="" x-model="search" />
+    <img src="assets/img/search.svg" /><input autofocus="" x-model="search" />
   </div>
   <div class="results" x-effect="filter(search)">
     <template x-for="item in items">
@@ -23,7 +23,7 @@
     async init() {
       this.$el.querySelector("input").focus()
 
-      this.results = await fetch("/blocks/@playground", {
+      this.results = await fetch("blocks/@playground", {
         headers: { accept: "application/json" },
       }).then((resp) => resp.json())
       this.items = this.results

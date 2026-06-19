@@ -38,7 +38,7 @@
           <img
             :style="{ cursor: 'pointer', marginTop: 0, width: '16px', height: '16px' }"
             @click.stop="menuOpen = !menuOpen"
-            src="/assets/icons/more-vertical-alt.svg"
+            src="assets/icons/more-vertical-alt.svg"
           />
           <div
             :style="{
@@ -82,13 +82,13 @@
     <div class="file-menu">
       <div class="actions">
         <button @click="createScript('block')" title="Create Block">
-          <img src="/assets/img/extension.svg" />
+          <img src="assets/img/extension.svg" />
         </button>
         <button @click="createScript('mixin')" title="Create Mixin">
-          <img src="/assets/img/plug.svg" />
+          <img src="assets/img/plug.svg" />
         </button>
         <button @click="createScript('app')" title="Create App">
-          <img src="/assets/img/bolt.svg" />
+          <img src="assets/img/bolt.svg" />
         </button>
       </div>
       <input
@@ -118,10 +118,10 @@
             <img
               :style="{ marginTop: '0' }"
               :src="file.type === 'block' || file.type === 'cell'
-                  ? '/assets/img/extension.svg'
+                  ? 'assets/img/extension.svg'
                   : file.type === 'mixin'
-                    ? '/assets/img/plug.svg'
-                    : '/assets/img/bolt.svg'"
+                    ? 'assets/img/plug.svg'
+                    : 'assets/img/bolt.svg'"
             />
             <template x-if="!file.hasOwnProperty('newName')">
               <span
@@ -156,7 +156,7 @@
               <button
                 @click.stop="openApp(props.selectedPackage, file.name + '-' + file.type)"
               >
-                <img :style="{ marginTop: 0 }" src="/assets/img/play.svg" />
+                <img :style="{ marginTop: 0 }" src="assets/img/play.svg" />
               </button>
             </template>
             <div
@@ -168,7 +168,7 @@
               <img
                 :style="{ marginTop: 0 }"
                 @click.stop="menuOpen = !menuOpen"
-                src="/assets/icons/more-vertical-alt.svg"
+                src="assets/icons/more-vertical-alt.svg"
               />
               <div
                 :style="{
@@ -231,7 +231,7 @@
     borderRadius: '4px'
   }"
   >
-    <img src="/assets/img/eye-alt.svg" />
+    <img src="assets/img/eye-alt.svg" />
   </div>
 </div>
 

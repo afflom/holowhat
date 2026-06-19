@@ -10,7 +10,7 @@ import Observer from "./observer.js"
 import automergeSyncPlugin from "./automerge-sync-plugin.js"
 
 // Import Holospaces Browser Peer Substrate
-import init, { Console, WebRtcLink } from "../../../pkg/holospaces_web.js";
+import init, { Console, WebRtcLink } from "../../pkg/holospaces_web.js";
 
 // Loader animation
 document.body.innerHTML += `
@@ -158,6 +158,21 @@ window.handle = null
 // 5. Global Mock API to handle Worlds and Session requests in-browser
 const originalFetch = window.fetch;
 window.fetch = async function (url, options) {
+  const cleanUrl = url.startsWith("/") ? url : "/" + url;
+  if (cleanUrl.startsWith("blocks/")) {
+    if (cleanUrl === "blocks/@playground") {
+      const blocks = [
+        "about-page", "api-client", "block-editor", "code", "cursor", "data",
+        "device", "devices", "files", "home-page", "library", "login", "menu",
+        "minimap", "navbar", "pointer", "profile", "spotlight",
+        "spotlight-button", "user", "window", "world", "worlds"
+      ].map(name => ({ name }));
+      return new Response(JSON.stringify(blocks), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    const relativePath = url.startsWith("/") ? url.substring(1) : url;
+    return originalFetch(relativePath, options);
+  }
+
   if (url.startsWith("/api/auth/set-session")) {
     localStorage.setItem("playground_logged_in", "true");
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -236,7 +251,7 @@ async function bootstrapPresets() {
     for (const block of blocks) {
       const name = block.replace(".html", "");
       try {
-        const resp = await originalFetch("/blocks/" + block);
+        const resp = await originalFetch("blocks/" + block);
         if (resp.ok) {
           const text = await resp.text();
           pkgHandle.change(doc => {

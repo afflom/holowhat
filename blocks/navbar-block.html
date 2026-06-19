@@ -1,13 +1,13 @@
 <div @peer-heartbeat.window="heartbeat" @resize.window="width = window.innerWidth" class="wrapper">
   <div class="square white" :class="{ active: spotlightOpen }" @click.stop="spotlightOpen = !spotlightOpen">
-    <img src="/assets/img/favicon.svg">
+    <img src="assets/img/favicon.svg">
   </div>
 
   <div id="spotlight" x-show="spotlightOpen" class="spotlight" @click.outside="if ($event.target.tagName !== 'NAVBAR-BLOCK') {
     spotlightOpen = false
   }">
     <div class="search">
-      <img src="/assets/img/search.svg"><input :style="{ fontFamily: 'inherit' }" x-effect="spotlightOpen && $nextTick(() => $el.focus())" autofocus="true" x-model="search">
+      <img src="assets/img/search.svg"><input :style="{ fontFamily: 'inherit' }" x-effect="spotlightOpen && $nextTick(() => $el.focus())" autofocus="true" x-model="search">
     </div>
     <flex-block :style="{ gap: '12px', flexWrap: 'wrap' }">
       <app-block @click="spotlightOpen = false" pkg="@playground" tag="profile-app" icon="profile" label="Settings"></app-block>
@@ -22,7 +22,7 @@
   <template x-teleport="body">
     <div data-block="navbar-block" @click.outside="themeOpen = false" :style="{ position: 'fixed', top: '12px', right: '52px' }">
       <button @click="themeOpen = !themeOpen" :style="{ cursor: 'pointer', background: '#222', border: 0, padding: '6px', border: '1px solid rgba(255, 255, 255, 0.5)', borderRadius: '4px' }">
-        <img :style="{ filter: 'invert(1)', width: '22px' }" src="/assets/img/theme.svg">
+        <img :style="{ filter: 'invert(1)', width: '22px' }" src="assets/img/theme.svg">
       </button>
       <div x-show="themeOpen" x-transition="" :style="{ textAlign: 'right', color: 'white', position: 'absolute', marginTop: '4px', right: 0 }">
         <template x-for="bg in ['lotr', 'snow', 'bubble', 'night', 'turf']">
@@ -48,7 +48,7 @@
   <template x-teleport="body">
     <div data-block="navbar-block" @click.outside="fontOpen = false" :style="{ position: 'fixed', top: '12px', right: '92px' }">
       <button @click="fontOpen = !fontOpen" :style="{ cursor: 'pointer', background: '#222', border: 0, padding: '6px', border: '1px solid rgba(255, 255, 255, 0.5)', borderRadius: '4px' }">
-        <img :style="{ filter: 'invert(1)', width: '22px' }" src="/assets/img/format-text.svg">
+        <img :style="{ filter: 'invert(1)', width: '22px' }" src="assets/img/format-text.svg">
       </button>
       <div x-show="fontOpen" x-transition="" :style="{ textAlign: 'right', color: 'white', position: 'absolute', marginTop: '4px', right: 0, maxHeight: '400px', overflowY: 'scroll', display: 'flex', flexDirection: 'column', alignItems: 'center' }">
         <input

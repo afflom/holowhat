@@ -25,7 +25,7 @@
           }"
           class="remove"
         >
-          <img src="/assets/icons/remove.svg" />
+          <img src="assets/icons/remove.svg" />
         </button>
       </div>
     </template>
@@ -34,7 +34,7 @@
       :style="{ marginTop: '8px', alignSelf: 'center' }"
       @click="newTable()"
     >
-      <img src="/assets/img/add.svg" />
+      <img src="assets/img/add.svg" />
     </button>
   </flex-block>
   <flex-block class="table-wrapper" :style="{ padding: '8px 4px' }">
@@ -66,7 +66,7 @@
                   <button @click="editedColIndex = index; colName = column">
                     <img
                       :style="{ width: '16px', height: '16px' }"
-                      src="/assets/img/pen.svg"
+                      src="assets/img/pen.svg"
                     />
                   </button>
                   <button
@@ -74,7 +74,7 @@
                   >
                     <img
                       :style="{ width: '16px', height: '16px' }"
-                      src="/assets/img/trash.svg"
+                      src="assets/img/trash.svg"
                     />
                   </button>
                 </flex-block>
@@ -86,7 +86,7 @@
               class="add"
               @click="doc.tables[selectedIndex].columns.push('')"
             >
-              <img src="/assets/img/add.svg" />
+              <img src="assets/img/add.svg" />
             </button>
           </th>
         </tr>
@@ -111,7 +111,7 @@
                 class="remove"
                 @click="doc.tables[selectedIndex].rows = doc.tables[selectedIndex].rows.filter((r, i) => i !== rowIdx)"
               >
-                <img src="/assets/icons/remove.svg" />
+                <img src="assets/icons/remove.svg" />
               </button>
             </td>
           </tr>
@@ -127,7 +127,7 @@
               doc.tables[selectedIndex].rows.push({})
             "
             >
-              <img src="/assets/img/add.svg" />
+              <img src="assets/img/add.svg" />
             </button>
           </td>
         </tr>
