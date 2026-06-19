@@ -455,7 +455,7 @@
             type: "epoch",
             author,
             timestamp,
-            text: `Confidentiality rotating wrapped key epoch initialized by ${author.substring(0, 8)}...`
+            text: `Security keys updated by ${author.substring(0, 8)}...`
           });
         }
       }
@@ -829,7 +829,7 @@
 
       const epochAdded = await col.addEvent(epochEvent);
       if (!epochAdded) {
-        alert("Failed to add epoch key rotation event.");
+        alert("Failed to update security keys.");
         return;
       }
       this.saveEventOnShell(shell, epochEvent);

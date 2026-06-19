@@ -18,18 +18,18 @@
     <template x-if="!participant">
       <div class="overlay">
         <div class="dialog glass">
-          <h2>Select Cryptographic Identity</h2>
+          <h2>User Account Sign-In</h2>
           <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
-            Holo-apps runs coordinator-free. Authorship and authority are defined by self-sovereign keys under open standards.
+            Sign in to access your workspaces and secure communication channels.
           </p>
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <button class="btn" @click="createNewIdentity()">
-              Generate New Identity Keypair
+              Create New User Profile
             </button>
             <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">or load existing</div>
-            <input type="text" class="input" placeholder="Paste Backup Payload (Base64)" x-model="privateKeyHexInput" />
+            <input type="text" class="input" placeholder="Paste Account Backup Payload" x-model="privateKeyHexInput" />
             <button class="btn btn-secondary" @click="loadExistingIdentity()" :disabled="!privateKeyHexInput">
-              Import Identity
+              Import Profile
             </button>
           </div>
         </div>
@@ -116,7 +116,7 @@
             
             <div class="user-badge" @click="showIdentityDetails = true" x-show="participant">
               <div class="status-dot"></div>
-              <span class="pubkey-abbr" x-text="'Operator: ' + (participant ? participant.id.substring(0, 12) : '') + '...'">Address</span>
+              <span class="pubkey-abbr" x-text="'User: ' + (participant ? participant.id.substring(0, 12) : '') + '...'">Address</span>
             </div>
           </div>
           
@@ -126,7 +126,7 @@
             <template x-if="activeTab === 'dashboard'">
               <div style="display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%;">
                 
-                <h3 style="font-size: 1.25rem; font-weight: 700; color: white; display: block; margin: 0 0 10px 0;">Sovereign Cryptographic Profile</h3>
+                <h3 style="font-size: 1.25rem; font-weight: 700; color: white; display: block; margin: 0 0 10px 0;">User Account & Security</h3>
                 
                 <!-- Open Standards Schema.org System Overview -->
                 <div class="settings-section-card" style="border-left: 4px solid var(--accent);">
@@ -187,7 +187,7 @@
                     
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                       <div>
-                        <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 500;">Workspace Identity Address:</span>
+                        <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 500;">Workspace ID:</span>
                         <code style="display: block; font-family: monospace; font-size: 0.8rem; word-break: break-all; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; color: #38bdf8; border: 1px solid var(--border); margin-top: 4px;" x-text="activeWorkspace.id"></code>
                       </div>
                       
@@ -213,26 +213,26 @@
 
                 <!-- Keys and Configuration Card -->
                 <div class="settings-section-card">
-                  <div class="settings-card-header">🛡️ Cryptographic Key Ring</div>
+                  <div class="settings-card-header">🛡️ Account Keys</div>
                   <div style="display: flex; flex-direction: column; gap: 16px; font-family: 'Source Code Pro', monospace; font-size: 0.85rem;">
                     <div>
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="color: var(--text-muted); font-weight: 500;">Signing Identity (SignatureAxis / κ):</span>
+                        <span style="color: var(--text-muted); font-weight: 500;">Signing Account ID:</span>
                         <span style="font-size: 0.75rem; background: rgba(99, 102, 241, 0.1); color: #818cf8; padding: 2px 8px; border-radius: 20px;">ECDSA P-256</span>
                       </div>
                       <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
                         <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #38bdf8;" x-text="participant ? participant.id : ''"></div>
-                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.id : ''); alert('Copied Public Key')">Copy</button>
+                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.id : ''); alert('Copied Account ID')">Copy</button>
                       </div>
                     </div>
                     <div>
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="color: var(--text-muted); font-weight: 500;">Exchange Public Key (CurveAxis / ECDH):</span>
+                        <span style="color: var(--text-muted); font-weight: 500;">Message Encryption Key:</span>
                         <span style="font-size: 0.75rem; background: rgba(168, 85, 247, 0.1); color: #c084fc; padding: 2px 8px; border-radius: 20px;">ECDH P-256</span>
                       </div>
                       <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
                         <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #c084fc;" x-text="participant ? participant.curveId : ''"></div>
-                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.curveId : ''); alert('Copied Exchange Key')">Copy</button>
+                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.curveId : ''); alert('Copied Encryption Key')">Copy</button>
                       </div>
                     </div>
                   </div>
@@ -240,16 +240,16 @@
 
                 <!-- Key Custody Card -->
                 <div class="settings-section-card">
-                  <div class="settings-card-header">🔑 Identity Backup & Custody</div>
+                  <div class="settings-card-header">🔑 Account Backup & Recovery</div>
                   <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5;">
-                    Your private keys are held locally in your browser's secure context. No coordinator can recover them if lost. Export a backup payload to persist custody across devices.
+                    Your account keys are saved locally in your browser's secure storage. Export an account backup to restore access on other devices.
                   </p>
                   <div style="display: flex; gap: 12px;">
                     <button class="btn" @click="exportIdentity()">
-                      Export Backup Payload
+                      Export Account Backup
                     </button>
                     <button class="btn" style="background: var(--error); border-color: rgba(239, 68, 68, 0.2);" @click="clearIdentity()">
-                      Wipe Session Keys
+                      Wipe Account Data
                     </button>
                   </div>
                 </div>
@@ -293,7 +293,7 @@
                     <span>📁 FreeDesktop.org App Launch Manifests</span>
                   </div>
                   <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
-                    Applications compiled in this sandboxed environment run as standard client-side custom blocks. Their configurations implement the standard FreeDesktop.org application registry specifications (INI type descriptors).
+                    Applications installed in this workspace run directly in your browser. All configuration settings are managed securely within your workspace profile.
                   </p>
                 </div>
 
@@ -302,10 +302,10 @@
                     <div class="app-card glass">
                       <div class="app-card-title" x-text="app.name">App Name</div>
                       <div class="app-card-desc">
-                        A coordination-free client-side chat app. All messages are encrypted under rotated epoch keys and verified cryptographically on receipt.
+                        Fast client-side chat application with secure message encryption.
                       </div>
                       <div class="app-card-meta">
-                        Manifest κ: <span x-text="app.id.substring(0, 16) + '...'"></span>
+                        App ID: <span x-text="app.id.substring(0, 16) + '...'"></span>
                       </div>
                       <div style="display: flex; gap: 8px; margin-top: auto;">
                         <template x-if="!isAppInstalled(app.id)">
@@ -463,7 +463,7 @@
           <h2>Join Workspace</h2>
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4;">
-              Paste the invite code shared by an operator of the workspace. This imports the workspace DAG and its channel collections.
+              Paste the invite code shared by a member of the workspace to import its channels.
             </p>
             <input type="text" class="input" placeholder="Paste Workspace Invite Code" x-model="inviteCodeInput" />
             <div style="display: flex; gap: 8px;">
@@ -517,8 +517,8 @@
           <h2>Add Contact Manually</h2>
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <input type="text" class="input" placeholder="Alias Name (e.g. Alice)" x-model="newContactAlias" />
-            <input type="text" class="input" placeholder="Signing Public Key Address (κ)" x-model="newContactId" />
-            <input type="text" class="input" placeholder="ECDH Exchange Public Key" x-model="newContactCurveId" />
+            <input type="text" class="input" placeholder="Account ID" x-model="newContactId" />
+            <input type="text" class="input" placeholder="Message Encryption Key" x-model="newContactCurveId" />
             <div style="display: flex; gap: 8px;">
               <button class="btn" @click="createContact()" :disabled="!newContactId || !newContactCurveId">Add Contact</button>
               <button class="btn btn-secondary" @click="showAddContactModal = false">Cancel</button>
@@ -548,17 +548,17 @@
     <template x-if="showIdentityDetails">
       <div class="overlay" @click="showIdentityDetails = false">
         <div class="dialog glass" @click.stop>
-          <h2>Identity Configuration</h2>
+          <h2>Account Configuration</h2>
           <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
-            Your keys are kept inside browser LocalStorage. Ensure you back them up, as lost keys cannot be recovered by any coordinator.
+            Your account keys are saved locally in your browser's secure storage. Export an account backup to restore access on other devices.
           </p>
           <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
             <div>
-              <span style="font-weight: 600; font-size: 0.85rem;">Identity Hex Key:</span>
+              <span style="font-weight: 600; font-size: 0.85rem;">Account Key:</span>
               <div style="font-family: 'Source Code Pro', monospace; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem; word-break: break-all;" x-text="participant ? participant.id : ''"></div>
             </div>
-            <button class="btn btn-secondary" @click="exportIdentity()">Export Identity Payload</button>
-            <button class="btn btn-secondary" style="background: var(--error);" @click="clearIdentity()">Wipe Session Keys</button>
+            <button class="btn btn-secondary" @click="exportIdentity()">Export Account Backup</button>
+            <button class="btn btn-secondary" style="background: var(--error);" @click="clearIdentity()">Wipe Account Data</button>
             <button class="btn btn-success" @click="showIdentityDetails = false">Close</button>
           </div>
         </div>

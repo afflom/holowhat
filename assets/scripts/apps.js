@@ -124,8 +124,10 @@ Alpine.data("shell", () => {
 
       // Warm up StandardsValidator context schemas
       try {
+        const origin = window.location.origin;
+        const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : "";
         const { StandardsValidator } = await import("./standards-validator.js");
-        await StandardsValidator.init();
+        await StandardsValidator.init(`${origin}${base}/`);
       } catch (e) {
         console.error("Failed to initialize StandardsValidator context in apps.js:", e);
       }
@@ -173,10 +175,10 @@ Alpine.data("shell", () => {
         
         await this.onIdentityReady();
         
-        alert("Identity imported successfully!");
+        alert("Account imported successfully!");
       } catch (e) {
         console.error(e);
-        alert("Failed to import identity. Ensure you pasted a valid Backup Payload.");
+        alert("Failed to import account. Ensure you pasted a valid Account Backup Payload.");
       }
     },
 
@@ -584,7 +586,7 @@ Alpine.data("shell", () => {
 
     async addMemberToActiveWorkspace() {
       if (!this.activeWorkspace) return;
-      const memberId = prompt("Enter Member's Public Key (κ):");
+      const memberId = prompt("Enter Member's Account ID:");
       if (!memberId) return;
 
       const wsCol = this.activeWorkspace.collection;
@@ -847,15 +849,15 @@ Alpine.data("shell", () => {
       try {
         const jwkObj = await this.participant.exportJwk();
         const serialized = base64Encode(JSON.stringify(jwkObj));
-        prompt("Copy this Complete Backup Payload (Base64-encoded JWKs):", serialized);
+        prompt("Copy this Complete Account Backup Payload:", serialized);
       } catch (e) {
         console.error(e);
-        alert("Failed to export identity.");
+        alert("Failed to export account.");
       }
     },
 
     clearIdentity() {
-      if (confirm("Are you sure you want to log out and clear your identity from this browser? Make sure you backed up your keys!")) {
+      if (confirm("Are you sure you want to log out and clear your account from this browser? Make sure you backed up your account payload!")) {
         localStorage.removeItem("holoapps_participant_jwk");
         localStorage.removeItem("holoapps_identity_key");
         localStorage.removeItem("holoapps_curve_key");
