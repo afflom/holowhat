@@ -284,16 +284,16 @@ async function bootstrapPresets() {
       doc.packages = [defaultPkgId];
       doc.theme = "night";
       doc.font = "Nanum Pen Script";
-      doc.worlds = [];
-      doc.blocks = {};
-      
-      // Default startup UI blocks placed on the canvas
-      doc.blocks["home-block"] = {
-        id: "home-block",
-        tag: "home-page-block",
-        x: 350,
-        y: 100,
-      };
+      doc.world = [
+        {
+          id: "home-block",
+          tagName: "home-page-block",
+          props: {
+            x: "350",
+            y: "100"
+          }
+        }
+      ];
     });
     
     // Map defaultWorldId to this document's local data (both formats)
@@ -329,6 +329,11 @@ async function findWithBackoff(id, maxRetries = 3, delay = 300) {
 }
 
 handle = await findWithBackoff(docUrl)
+handle.change(doc => {
+  if (!doc.world) {
+    doc.world = [];
+  }
+});
 window.handle = handle
 
 window.throttledQueue = []
