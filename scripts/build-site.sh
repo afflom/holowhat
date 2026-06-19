@@ -54,7 +54,7 @@ cargo run -q -p holowhat-tools -- crates/holospaces-web/web
 
 echo "build-site: building Platform Manager wasm"
 wasm_bindgen_version=$(awk '/name = "wasm-bindgen"/ { getline; gsub(/"/, "", $3); print $3; exit }' crates/holospaces-web/Cargo.lock)
-wasm_pack_args=()
+wasm_pack_args=(--no-opt)
 if wasm_bindgen_dir="$(find_wasm_bindgen "$wasm_bindgen_version")"; then
     export PATH="$wasm_bindgen_dir:$PATH"
     wasm_pack_args=(--mode no-install --no-opt)

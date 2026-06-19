@@ -656,7 +656,7 @@ export class Collection {
     const decryptedPayloads = [];
 
     for (const ev of sortedEvents) {
-      if (ev.header.kind === "genesis" || ev.header.kind === "membership" || ev.header.kind === "epoch" || ev.header.kind === "tombstone") {
+      if (ev.header.kind === "membership" || ev.header.kind === "epoch" || ev.header.kind === "tombstone") {
         continue; // Platform kinds are handled by membership/epochs mapping
       }
       const payload = await this.decryptEventBody(ev);

@@ -5,6 +5,34 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+export function workspaceReducer(events) {
+  const state = { name: "", channels: [], members: [] };
+  for (const ev of events) {
+    const payload = ev.payload || (ev.body ? ev.body.payload : {}) || {};
+    const type = payload.type || "";
+    const eventKind = ev.kind || (ev.header ? ev.header.kind : "");
+    const author = ev.author || (ev.header ? ev.header.author : "");
+    
+    if (eventKind === "genesis" || type === "Group") {
+      state.name = payload.name || "Unnamed Workspace";
+      state.channels = payload.channels || [];
+      state.members = payload.members || [author];
+    } else if (eventKind === "add-channel" || (type === "Add" && payload.object?.type === "Conversation")) {
+      const chId = payload.object?.id || payload.id;
+      const chName = payload.object?.name || payload.name;
+      if (chId && !state.channels.some(c => c.id === chId)) {
+        state.channels.push({ id: chId, name: chName });
+      }
+    } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person")) {
+      const memberId = payload.object?.id || payload.id;
+      if (memberId && !state.members.includes(memberId)) {
+        state.members.push(memberId);
+      }
+    }
+  }
+  return state;
+}
+
 async function runTests() {
   console.log("==============================================");
   console.log("🧪 Running holo-apps Architecture Validation Suite...");
@@ -209,8 +237,8 @@ async function runTests() {
     // Import external validation artifacts (standards contexts)
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-    const asContextPath = path.join(__dirname, "activitystreams-context.json");
-    const schemaContextPath = path.join(__dirname, "schema-org-context.json");
+    const asContextPath = path.join(__dirname, "schemas/activitystreams-context.json");
+    const schemaContextPath = path.join(__dirname, "schemas/schema-org-context.json");
 
     const asContext = JSON.parse(fs.readFileSync(asContextPath, "utf-8"))["@context"];
     const schemaContext = JSON.parse(fs.readFileSync(schemaContextPath, "utf-8"))["@context"];
@@ -338,6 +366,72 @@ async function runTests() {
     validateAgainstContext(schemaPersonObj, schemaContext, "SchemaPerson");
 
     console.log("✓ W3C ActivityStreams 2.0 & Schema.org Standards Conformance PASSED");
+
+    // 8. Workspace Replication and P2P Synchronization Validation
+    console.log("\n8. Testing Workspace Replication (Export/Import/Sync)...");
+    
+    // Setup a workspace with 2 channels for Alice
+    const wsGenesis = await Event.create({
+      kind: "genesis",
+      author: alice.id,
+      collectionId: "temp-workspace-genesis",
+      payload: {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Group",
+        "name": "Coop Hive",
+        "channels": [
+          { "type": "Conversation", "id": "chan-gen", "name": "general" },
+          { "type": "Conversation", "id": "chan-dev", "name": "development" }
+        ],
+        "members": [alice.id]
+      }
+    }, alice);
+
+    const wsColAlice = new Collection(wsGenesis.id, workspaceReducer);
+    await wsColAlice.addEvent(wsGenesis);
+
+    // Export invite code representation
+    const allWsEvents = Array.from(wsColAlice.events.values()).map(ev => ({
+      header: ev.header,
+      body: ev.body,
+      signature: ev.signature,
+      id: ev.id
+    }));
+
+    const channelBundles = [
+      { id: "chan-gen", name: "general", events: [] },
+      { id: "chan-dev", name: "development", events: [] }
+    ];
+
+    const invitePayload = {
+      type: "WorkspaceInvite",
+      id: wsColAlice.id,
+      name: "Coop Hive",
+      genesisEvent: allWsEvents.find(e => e.header.kind === "genesis"),
+      events: allWsEvents.filter(e => e.header.kind !== "genesis"),
+      channels: channelBundles
+    };
+
+    // Replicate / Import to Bob
+    const payloadStr = JSON.stringify(invitePayload);
+    const parsedPayload = JSON.parse(payloadStr);
+
+    assert.strictEqual(parsedPayload.type, "WorkspaceInvite");
+    assert.strictEqual(parsedPayload.name, "Coop Hive");
+    assert.strictEqual(parsedPayload.channels.length, 2);
+
+    // Bob creates collection from payload
+    const bobWsGenesisData = parsedPayload.genesisEvent;
+    const bobGenesis = new Event(bobWsGenesisData.header, bobWsGenesisData.body, bobWsGenesisData.signature, bobWsGenesisData.id);
+    const wsColBob = new Collection(bobGenesis.id, workspaceReducer);
+    await wsColBob.addEvent(bobGenesis);
+
+    const bobWsState = await wsColBob.render();
+    assert.strictEqual(bobWsState.name, "Coop Hive");
+    assert.strictEqual(bobWsState.channels.length, 2);
+    assert.strictEqual(bobWsState.channels[0].name, "general");
+    assert.strictEqual(bobWsState.channels[1].name, "development");
+    console.log("✓ Workspace Replication & Sync validation PASSED");
 
     console.log("\n==============================================");
     console.log("🎉 ALL holo-apps Architecture Validation Tests PASSED!");

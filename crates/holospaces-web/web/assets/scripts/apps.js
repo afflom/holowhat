@@ -8,25 +8,29 @@ await init();
 const console0 = new Console();
 console.log("Substrate console active in Holo-Apps Shell");
 
-export function workspaceReducer(state = { name: "", channels: [], members: [] }, event) {
-  const payload = event.body.payload || {};
-  const type = payload.type || "";
-  const eventKind = event.header.kind;
-  
-  if (eventKind === "genesis" || type === "Group") {
-    state.name = payload.name || "Unnamed Workspace";
-    state.channels = payload.channels || [];
-    state.members = payload.members || [event.header.author];
-  } else if (eventKind === "add-channel" || (type === "Add" && payload.object?.type === "Conversation")) {
-    const chId = payload.object?.id || payload.id;
-    const chName = payload.object?.name || payload.name;
-    if (chId && !state.channels.some(c => c.id === chId)) {
-      state.channels.push({ id: chId, name: chName });
-    }
-  } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person")) {
-    const memberId = payload.object?.id || payload.id;
-    if (memberId && !state.members.includes(memberId)) {
-      state.members.push(memberId);
+export function workspaceReducer(events) {
+  const state = { name: "", channels: [], members: [] };
+  for (const ev of events) {
+    const payload = ev.payload || (ev.body ? ev.body.payload : {}) || {};
+    const type = payload.type || "";
+    const eventKind = ev.kind || (ev.header ? ev.header.kind : "");
+    const author = ev.author || (ev.header ? ev.header.author : "");
+    
+    if (eventKind === "genesis" || type === "Group") {
+      state.name = payload.name || "Unnamed Workspace";
+      state.channels = payload.channels || [];
+      state.members = payload.members || [author];
+    } else if (eventKind === "add-channel" || (type === "Add" && payload.object?.type === "Conversation")) {
+      const chId = payload.object?.id || payload.id;
+      const chName = payload.object?.name || payload.name;
+      if (chId && !state.channels.some(c => c.id === chId)) {
+        state.channels.push({ id: chId, name: chName });
+      }
+    } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person")) {
+      const memberId = payload.object?.id || payload.id;
+      if (memberId && !state.members.includes(memberId)) {
+        state.members.push(memberId);
+      }
     }
   }
   return state;
@@ -553,6 +557,110 @@ Alpine.data("shell", () => {
       this.activeChannel = null;
       this.activeTab = "dashboard";
       this.topBarTitle = `Workspace: ${ws.name}`;
+    },
+
+    async exportActiveWorkspaceInvite() {
+      if (!this.activeWorkspace) return;
+      try {
+        const wsCol = this.activeWorkspace.collection;
+        const allEvents = Array.from(wsCol.events.values()).map(ev => ({
+          header: ev.header,
+          body: ev.body,
+          signature: ev.signature,
+          id: ev.id
+        }));
+
+        const channelBundles = [];
+        for (const ch of this.activeWorkspace.channels) {
+          const chEventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+          const chEvents = [];
+          for (const evId of chEventIds) {
+            const raw = localStorage.getItem(`holoapps_event:${evId}`);
+            if (raw) chEvents.push(JSON.parse(raw));
+          }
+          channelBundles.push({
+            id: ch.id,
+            name: ch.name,
+            events: chEvents
+          });
+        }
+
+        const payload = {
+          type: "WorkspaceInvite",
+          id: wsCol.id,
+          name: this.activeWorkspace.name,
+          genesisEvent: allEvents.find(e => e.header.kind === "genesis"),
+          events: allEvents.filter(e => e.header.kind !== "genesis"),
+          channels: channelBundles
+        };
+
+        const serialized = base64Encode(JSON.stringify(payload));
+        prompt("Share this Workspace Invite Code:", serialized);
+      } catch (e) {
+        console.error(e);
+        alert("Failed to export workspace invite.");
+      }
+    },
+
+    async joinWorkspace() {
+      if (!this.inviteCodeInput) return;
+      try {
+        const payload = JSON.parse(base64Decode(this.inviteCodeInput.trim()));
+        if (payload && payload.type === "WorkspaceInvite" && payload.id && payload.genesisEvent) {
+          const gData = payload.genesisEvent;
+          const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
+          
+          const col = new Collection(genesis.id, workspaceReducer);
+          await col.addEvent(genesis);
+          this.saveEventToStorage(genesis);
+
+          if (payload.events) {
+            for (const evData of payload.events) {
+              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+              await col.addEvent(ev);
+              this.saveEventToStorage(ev);
+            }
+          }
+
+          if (payload.channels) {
+            for (const chBundle of payload.channels) {
+              this.saveChannelReference(chBundle.id, chBundle.name);
+              for (const evData of chBundle.events) {
+                const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+                this.saveEventToStorage(ev);
+              }
+            }
+          }
+
+          const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+          if (!savedRefs.some(w => w.id === genesis.id)) {
+            savedRefs.push({ id: genesis.id, name: payload.name || "Joined Workspace" });
+            localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+          }
+
+          const state = await col.render();
+          const wsObj = {
+            id: genesis.id,
+            name: payload.name || "Joined Workspace",
+            collection: col,
+            channels: state.channels || [],
+            members: state.members || []
+          };
+
+          this.workspaces.push(wsObj);
+          this.activeWorkspace = wsObj;
+          this.channels = wsObj.channels;
+          
+          this.inviteCodeInput = "";
+          this.showJoinWorkspaceModal = false;
+          alert("Joined workspace successfully!");
+        } else {
+          alert("Invalid workspace invite payload.");
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Failed to join workspace.");
+      }
     },
 
     // Legacy fallback support for loading/saving single channels directly
