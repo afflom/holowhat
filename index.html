@@ -58,6 +58,9 @@
               <li class="sidebar-item" :class="{ 'active': activeTab === 'apps' }" @click="selectTab('apps')">
                 <span>Index App Store</span>
               </li>
+              <li class="sidebar-item" :class="{ 'active': activeTab === 'contacts' }" @click="activeTab = 'contacts'; activeChannel = null; topBarTitle = 'Contacts & Pools Directory'">
+                <span>Contacts & Pools</span>
+              </li>
               <li class="sidebar-item" @click="window.location.href = 'login.html'">
                 <span style="display: flex; align-items: center; gap: 8px;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
@@ -66,25 +69,47 @@
               </li>
             </ul>
 
-            <!-- Active Channels (Collections) -->
-            <div class="section-label">Active Channels</div>
+            <!-- Workspaces (AS2 Group) -->
+            <div class="section-label">Workspaces</div>
             <ul class="sidebar-list">
-              <template x-for="ch in channels" :key="ch.id">
-                <li class="sidebar-item" :class="{ 'active': activeTab === 'channel' && activeChannel?.id === ch.id }" @click="selectChannel(ch)">
-                  <span x-text="ch.name">Channel Name</span>
-                  <span class="sidebar-item-meta" x-text="ch.id.substring(0, 6)">ID</span>
+              <template x-for="ws in workspaces" :key="ws.id">
+                <li class="sidebar-item" :class="{ 'active': activeWorkspace?.id === ws.id }" @click="selectWorkspace(ws)">
+                  <span x-text="ws.name">Workspace Name</span>
+                  <span class="sidebar-item-meta" x-text="ws.id.substring(0, 6)">ID</span>
                 </li>
               </template>
             </ul>
-            
-            <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 8px;">
-              <button class="btn btn-secondary" @click="showCreateChannelModal = true" style="font-size: 0.8rem; padding: 8px 12px;">
-                + Create Channel
+            <div style="display: flex; gap: 8px; padding: 0 8px; margin-bottom: 16px;">
+              <button class="btn btn-secondary" @click="showCreateWorkspaceModal = true" style="font-size: 0.75rem; padding: 6px 8px; flex: 1;">
+                + Create WS
               </button>
-              <button class="btn btn-secondary" @click="showJoinChannelModal = true" style="font-size: 0.8rem; padding: 8px 12px;">
-                → Join Channel
+              <button class="btn btn-secondary" @click="showJoinWorkspaceModal = true" style="font-size: 0.75rem; padding: 6px 8px; flex: 1;">
+                → Join WS
               </button>
             </div>
+
+            <!-- Active Channels (AS2 Conversation) -->
+            <template x-if="activeWorkspace">
+              <div>
+                <div class="section-label" x-text="activeWorkspace.name + ' Channels'">Workspace Channels</div>
+                <ul class="sidebar-list">
+                  <template x-for="ch in channels" :key="ch.id">
+                    <li class="sidebar-item" :class="{ 'active': activeTab === 'channel' && activeChannel?.id === ch.id }" @click="selectChannel(ch)">
+                      <span x-text="'# ' + ch.name">Channel Name</span>
+                    </li>
+                  </template>
+                </ul>
+                
+                <div style="display: flex; gap: 8px; padding: 0 8px;">
+                  <button class="btn btn-secondary" @click="showCreateChannelModal = true" style="font-size: 0.75rem; padding: 6px 8px; flex: 1;">
+                    + Channel
+                  </button>
+                  <button class="btn btn-secondary" @click="addMemberToActiveWorkspace()" style="font-size: 0.75rem; padding: 6px 8px; flex: 1;">
+                    + Member
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -100,40 +125,122 @@
               <span class="pubkey-abbr" x-text="'Operator: ' + participant.id.substring(0, 12) + '...'">Address</span>
             </div>
           </div>
-
-          <div class="content-pane">
+          <div class="content-pane" style="overflow-y: auto;">
             
-            <!-- Dashboard Tab -->
+            <!-- Dashboard Tab (Cryptographic Control Plane) -->
             <template x-if="activeTab === 'dashboard'">
-              <div style="display: flex; flex-direction: column; gap: 24px; max-width: 800px;">
-                <div class="glass" style="padding: 24px;">
-                  <h3 style="margin-bottom: 12px; font-weight: 600;">Sovereign Cryptographic Profile</h3>
-                  <div style="display: flex; flex-direction: column; gap: 12px; font-family: 'Source Code Pro', monospace; font-size: 0.85rem;">
+              <div style="display: flex; flex-direction: column; gap: 24px; max-width: 800px; width: 100%;">
+                
+                <!-- Active Workspace Details -->
+                <template x-if="activeWorkspace">
+                  <div class="glass" style="padding: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px;">
+                      <h3 style="font-size: 1.25rem; font-weight: 700;" x-text="'Workspace: ' + activeWorkspace.name"></h3>
+                      <button class="btn" style="font-size: 0.8rem; padding: 6px 12px;" @click="exportActiveWorkspaceInvite()">
+                        Generate Workspace Invite Link/Code
+                      </button>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                      <div>
+                        <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 500;">Workspace Identity Address:</span>
+                        <code style="display: block; font-family: monospace; font-size: 0.8rem; word-break: break-all; background: var(--bg-primary); padding: 8px; border-radius: 4px; color: #38bdf8; margin-top: 4px;" x-text="activeWorkspace.id"></code>
+                      </div>
+                      
+                      <!-- Members list -->
+                      <div style="margin-top: 12px;">
+                        <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Workspace Member Roster:</span>
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+                          <template x-for="mId in activeWorkspace.members" :key="mId">
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
+                              <span style="font-family: monospace; font-size: 0.85rem;" x-text="mId === participant.id ? 'You (' + mId.substring(0, 16) + '...)' : mId.substring(0, 16) + '...'"></span>
+                              <template x-if="mId !== participant.id">
+                                <div>
+                                  <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 2px 8px;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0,6)); alert('Member added to your Default contacts!')">Add to Contacts</button>
+                                </div>
+                              </template>
+                            </div>
+                          </template>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Profile Header Card -->
+                <div class="glass" style="padding: 24px; display: flex; align-items: center; gap: 20px;">
+                  <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold; color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);" x-text="participant.id.substring(0, 2).toUpperCase()">
+                  </div>
+                  <div>
+                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 4px;">Sovereign Cryptographic Profile</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                      Self-sovereign participant credential initialized under P-256 standard curves.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Keys and Configuration Card -->
+                <div class="glass" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+                  <h4 style="font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Public Key Axes</h4>
+                  <div style="display: flex; flex-direction: column; gap: 16px; font-family: 'Source Code Pro', monospace; font-size: 0.85rem;">
                     <div>
-                      <span style="color: var(--text-muted);">Identity Address (κ):</span>
-                      <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; border: 1px solid var(--border); overflow-x: auto; word-break: break-all;" x-text="participant.id"></div>
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="color: var(--text-muted); font-weight: 500;">Signing Identity (κ):</span>
+                        <span style="font-size: 0.75rem; background: rgba(99, 102, 241, 0.1); color: #818cf8; padding: 2px 8px; border-radius: 20px;">ECDSA P-256</span>
+                      </div>
+                      <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-primary); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+                        <div style="overflow-x: auto; word-break: break-all; flex-grow: 1;" x-text="participant.id"></div>
+                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant.id); alert('Copied Public Key')">Copy</button>
+                      </div>
                     </div>
                     <div>
-                      <span style="color: var(--text-muted);">ECDH Public Exchange Key:</span>
-                      <div style="background: var(--bg-primary); padding: 8px; border-radius: 6px; border: 1px solid var(--border); overflow-x: auto; word-break: break-all;" x-text="participant.curveId"></div>
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="color: var(--text-muted); font-weight: 500;">Exchange Public Key:</span>
+                        <span style="font-size: 0.75rem; background: rgba(168, 85, 247, 0.1); color: #c084fc; padding: 2px 8px; border-radius: 20px;">ECDH P-256</span>
+                      </div>
+                      <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-primary); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+                        <div style="overflow-x: auto; word-break: break-all; flex-grow: 1;" x-text="participant.curveId"></div>
+                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant.curveId); alert('Copied Exchange Key')">Copy</button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
+                <!-- Key Custody Card -->
                 <div class="glass" style="padding: 24px;">
-                  <h3 style="margin-bottom: 12px; font-weight: 600;">Substrate Peer Status</h3>
-                  <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 16px;">
-                    Your browser peer executes standard verify-on-receipt (Law L5) and propagates updates via WebRTC data channel mesh links. No coordinator can censor or alter state.
+                  <h4 style="font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 16px;">Key Custody & Recovery</h4>
+                  <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin-bottom: 16px;">
+                    Your private keys are held locally in your browser's secure context. No coordinator can recover them if lost. Export a backup payload to persist custody across devices.
                   </p>
-                  <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <div style="padding: 10px 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; font-size: 0.85rem; color: var(--success);">
-                      Substrate Connection: Active
+                  <div style="display: flex; gap: 12px;">
+                    <button class="btn" @click="exportIdentity()">
+                      Export Backup Payload
+                    </button>
+                    <button class="btn" style="background: var(--error); border-color: rgba(239, 68, 68, 0.2);" @click="clearIdentity()">
+                      Wipe Session Keys
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Peer Status Details -->
+                <div class="glass" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                  <h4 style="font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 4px;">Substrate Peer Node</h4>
+                  <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between;">
+                      <span>Connection Status:</span>
+                      <span style="color: var(--success); font-weight: 600;">Active (online)</span>
                     </div>
-                    <div style="padding: 10px 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; color: var(--text-secondary);">
-                      Active Sync Swarms: <span x-text="channels.length">0</span>
+                    <div style="display: flex; justify-content: space-between;">
+                      <span>Causal Event Propagation:</span>
+                      <span>WebRTC Swarm Link</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                      <span>My Workspace Orgs (AS2 Group):</span>
+                      <span style="color: white; font-weight: 600;" x-text="workspaces.length">0</span>
                     </div>
                   </div>
                 </div>
+
               </div>
             </template>
 
@@ -156,7 +263,7 @@
                           <button class="btn" @click="installIndexApp(app)">Install App</button>
                         </template>
                         <template x-if="isAppInstalled(app.id)">
-                          <button class="btn btn-success" disabled>Installed</button>
+                          <button class="btn btn-success" style="cursor: not-allowed; opacity: 0.7;" disabled>Installed</button>
                         </template>
                       </div>
                     </div>
@@ -165,47 +272,91 @@
               </div>
             </template>
 
-            <!-- Channel / Chat Tab -->
-            <template x-if="activeTab === 'channel' && activeChannel">
-              <div class="messenger-container">
-                <!-- Message Thread Transcript Area -->
-                <div class="messages-list" id="chat-messages-container">
-                  <template x-for="msg in activeChannelView.messages" :key="msg.id">
-                    <div class="message-item" :class="{ 'mine': msg.author === participant.id }">
-                      <div class="message-meta">
-                        <span class="message-author" x-text="msg.author === participant.id ? 'You' : msg.author.substring(0, 8)">Author</span>
-                        <span x-text="new Date(msg.timestamp).toLocaleTimeString()">Time</span>
-                        <template x-if="msg.edits.length > 0">
-                          <span style="font-style: italic; color: var(--text-muted);">(edited)</span>
-                        </template>
-                      </div>
-                      
-                      <div class="message-body" x-text="msg.body">Message Text</div>
-                      
-                      <!-- Reactions list -->
-                      <div class="reactions-bar" x-show="msg.reactions.length > 0">
-                        <template x-for="react in msg.reactions" :key="react.symbol">
-                          <span class="reaction-badge" :class="{ 'active': react.authors.includes(participant.id) }" @click="toggleReaction(msg, react.symbol)" x-text="react.symbol + ' ' + react.count">👍 1</span>
-                        </template>
-                      </div>
-
-                      <div class="message-actions">
-                        <button class="message-action-btn" @click="triggerReaction(msg, '👍')">👍</button>
-                        <button class="message-action-btn" @click="triggerReaction(msg, '❤️')">❤️</button>
-                        <template x-if="msg.author === participant.id">
-                          <button class="message-action-btn" @click="startEdit(msg)">Edit</button>
-                        </template>
-                      </div>
+            <!-- Contacts & Pools Tab -->
+            <template x-if="activeTab === 'contacts'">
+              <div style="display: flex; gap: 24px; width: 100%; height: 100%;">
+                <!-- Left Pools Selector Pane -->
+                <div class="glass" style="width: 240px; padding: 16px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h4 style="font-weight: 600; font-size: 0.9rem; text-transform: uppercase; color: var(--text-secondary);">Contact Pools</h4>
+                    <button class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.8rem;" @click="showCreatePoolModal = true">+</button>
+                  </div>
+                  
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div 
+                      class="sidebar-item" 
+                      :class="{ 'active': selectedPoolId === 'all' }" 
+                      @click="selectedPoolId = 'all'"
+                      style="display: flex; justify-content: space-between; align-items: center;"
+                    >
+                      <span>Show All</span>
+                      <span class="sidebar-item-meta" x-text="contacts.length">0</span>
                     </div>
-                  </template>
+                    <template x-for="pool in contactPools" :key="pool.id">
+                      <div 
+                        class="sidebar-item" 
+                        :class="{ 'active': selectedPoolId === pool.id }" 
+                        @click="selectedPoolId = pool.id"
+                        style="display: flex; justify-content: space-between; align-items: center;"
+                      >
+                        <span x-text="pool.name">Pool Name</span>
+                        <span class="sidebar-item-meta" x-text="contacts.filter(c => c.pools?.includes(pool.id)).length">0</span>
+                      </div>
+                    </template>
+                  </div>
                 </div>
 
-                <!-- Input Message Bar -->
-                <div class="input-bar">
-                  <input type="text" class="input" placeholder="Type a message..." x-model="messageInput" @keydown.enter="postMessage()" />
-                  <button class="btn" @click="postMessage()">Send</button>
-                  <button class="btn btn-secondary" @click="generateInvitePrompt()">Invite Member</button>
+                <!-- Right Directory Contacts list -->
+                <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="font-size: 1.2rem; font-weight: 700;">Contacts Directory</h3>
+                    <button class="btn" @click="showAddContactModal = true">+ Add Contact Manually</button>
+                  </div>
+                  
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <template x-for="c in contacts.filter(c => selectedPoolId === 'all' || c.pools?.includes(selectedPoolId))" :key="c.id">
+                      <div class="glass" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; border-color: rgba(255,255,255,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                          <div>
+                            <div style="font-weight: 600; font-size: 1.05rem;" x-text="c.name">Contact Alias</div>
+                            <div style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" x-text="'κ: ' + c.id"></div>
+                            <div style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" x-text="'ECDH: ' + c.curveId"></div>
+                          </div>
+                          
+                          <template x-if="c.id !== participant.id">
+                            <button class="btn btn-secondary" style="background: var(--error); border: none; padding: 4px 10px; font-size: 0.8rem;" @click="deleteContact(c.id)">Delete</button>
+                          </template>
+                        </div>
+                        
+                        <!-- Pools association -->
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px;">
+                          <span style="font-size: 0.75rem; color: var(--text-muted);">Assigned Pools:</span>
+                          <template x-for="pool in contactPools" :key="pool.id">
+                            <button 
+                              class="btn" 
+                              :style="{ 
+                                fontSize: '0.7rem', 
+                                padding: '2px 8px', 
+                                background: c.pools?.includes(pool.id) ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                                borderColor: c.pools?.includes(pool.id) ? '#6366f1' : 'rgba(255,255,255,0.1)',
+                                color: c.pools?.includes(pool.id) ? 'white' : 'var(--text-secondary)'
+                              }"
+                              @click="toggleContactPool(c.id, pool.id)"
+                              x-text="pool.name"
+                            ></button>
+                          </template>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
                 </div>
+              </div>
+            </template>
+
+            <!-- Channel / Chat Tab (Dynamic Component Delegation) -->
+            <template x-if="activeTab === 'channel' && activeChannel">
+              <div style="width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; position: relative; margin-top: -16px;">
+                <messenger-block :channel-id="activeChannel.id" style="width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden;"></messenger-block>
               </div>
             </template>
 
@@ -216,6 +367,41 @@
     </template>
 
     <!-- Modals -->
+
+    <!-- Create Workspace Modal -->
+    <template x-if="showCreateWorkspaceModal">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Create New Workspace</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" class="input" placeholder="Workspace Name" x-model="newWorkspaceName" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" @click="createWorkspace()" :disabled="!newWorkspaceName">Create</button>
+              <button class="btn btn-secondary" @click="showCreateWorkspaceModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Join Workspace Modal -->
+    <template x-if="showJoinWorkspaceModal">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Join Workspace</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4;">
+              Paste the invite code shared by an operator of the workspace. This imports the workspace DAG and its channel collections.
+            </p>
+            <input type="text" class="input" placeholder="Paste Workspace Invite Code" x-model="inviteCodeInput" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" @click="joinWorkspace()" :disabled="!inviteCodeInput">Join</button>
+              <button class="btn btn-secondary" @click="showJoinWorkspaceModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- Create Channel Modal -->
     <template x-if="showCreateChannelModal">
@@ -252,6 +438,40 @@
       </div>
     </template>
 
+    <!-- Add Contact Modal -->
+    <template x-if="showAddContactModal">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Add Contact Manually</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" class="input" placeholder="Alias Name (e.g. Alice)" x-model="newContactAlias" />
+            <input type="text" class="input" placeholder="Signing Public Key Address (κ)" x-model="newContactId" />
+            <input type="text" class="input" placeholder="ECDH Exchange Public Key" x-model="newContactCurveId" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" @click="createContact()" :disabled="!newContactId || !newContactCurveId">Add Contact</button>
+              <button class="btn btn-secondary" @click="showAddContactModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Create Pool Modal -->
+    <template x-if="showCreatePoolModal">
+      <div class="overlay">
+        <div class="dialog glass">
+          <h2>Create Contact Pool</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" class="input" placeholder="Pool Name (e.g. Collaborators)" x-model="newPoolName" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" @click="createPool()" :disabled="!newPoolName">Create Pool</button>
+              <button class="btn btn-secondary" @click="showCreatePoolModal = false">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- Profile Detail / Export Modal -->
     <template x-if="showIdentityDetails">
       <div class="overlay" @click="showIdentityDetails = false">
@@ -266,23 +486,8 @@
               <div style="font-family: 'Source Code Pro', monospace; background: var(--bg-primary); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem; word-break: break-all;" x-text="participant.id"></div>
             </div>
             <button class="btn btn-secondary" @click="exportIdentity()">Export Identity Payload</button>
+            <button class="btn btn-secondary" style="background: var(--error);" @click="clearIdentity()">Wipe Session Keys</button>
             <button class="btn btn-success" @click="showIdentityDetails = false">Close</button>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- Edit Message Modal -->
-    <template x-if="editingMessage">
-      <div class="overlay">
-        <div class="dialog glass">
-          <h2>Edit Message</h2>
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <input type="text" class="input" x-model="editingMessageBody" />
-            <div style="display: flex; gap: 8px;">
-              <button class="btn" @click="saveEdit()">Save</button>
-              <button class="btn btn-secondary" @click="editingMessage = null">Cancel</button>
-            </div>
           </div>
         </div>
       </div>

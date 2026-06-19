@@ -25,24 +25,40 @@
         
         <div class="nav-grp">
           <div class="grp-lbl">Navigation</div>
-          <div class="nav-item" :class="{ 'active': activeTab === 'dashboard' }" @click="activeTab = 'dashboard'">
+          <div class="nav-item" :class="{ 'active': activeTab === 'dashboard' }" @click="selectTab('dashboard')">
             Dashboard
           </div>
           <div class="nav-item" :class="{ 'active': activeTab === 'index' }" @click="activeTab = 'index'">
             App Store Index
           </div>
+          <div class="nav-item" :class="{ 'active': activeTab === 'contacts' }" @click="activeTab = 'contacts'; activeChannel = null; topBarTitle = 'Contacts Directory'">
+            Contacts & Pools
+          </div>
         </div>
 
         <div class="nav-grp">
-          <div class="grp-lbl">My Channels</div>
-          <template x-for="ch in channels">
-            <div class="nav-item" :class="{ 'active': activeTab === 'channel' && activeChannel?.id === ch.id }" @click="selectChannel(ch)">
-              <span x-text="ch.name"></span>
+          <div class="grp-lbl">Workspaces</div>
+          <template x-for="ws in workspaces" :key="ws.id">
+            <div class="nav-item" :class="{ 'active': activeWorkspace?.id === ws.id }" @click="selectWorkspace(ws)">
+              <span x-text="ws.name"></span>
             </div>
           </template>
-          <button class="add-btn" @click="createChannelPrompt()">+ Create Channel</button>
-          <button class="add-btn" @click="joinChannelPrompt()">→ Join Channel</button>
+          <button class="add-btn" @click="createWorkspacePrompt()">+ Create Workspace</button>
+          <button class="add-btn" @click="joinWorkspacePrompt()">→ Join Workspace</button>
         </div>
+
+        <template x-if="activeWorkspace">
+          <div class="nav-grp">
+            <div class="grp-lbl" x-text="activeWorkspace.name + ' Channels'">Channels</div>
+            <template x-for="ch in channels" :key="ch.id">
+              <div class="nav-item" :class="{ 'active': activeTab === 'channel' && activeChannel?.id === ch.id }" @click="selectChannel(ch)">
+                <span x-text="'# ' + ch.name"></span>
+              </div>
+            </template>
+            <button class="add-btn" @click="createChannelPrompt()">+ Create Channel</button>
+            <button class="add-btn" @click="addMemberToActiveWorkspace()">+ Add Member</button>
+          </div>
+        </template>
       </div>
 
       <!-- Main Panel -->
@@ -57,10 +73,35 @@
         </div>
 
         <!-- Inner Content Area -->
-        <div class="inner-area">
+        <div class="inner-area" style="overflow-y: auto; flex-grow: 1;">
           <!-- Dashboard View -->
           <template x-if="activeTab === 'dashboard'">
-            <div class="dashboard-view">
+            <div class="dashboard-view" style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+              <template x-if="activeWorkspace">
+                <div class="info-box">
+                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 12px;">
+                    <h4 style="margin: 0; font-size: 1rem; color: white;" x-text="'Workspace: ' + activeWorkspace.name"></h4>
+                    <button class="action-btn" style="font-size: 0.75rem; padding: 4px 10px;" @click="exportActiveWorkspaceInvite()">Export Workspace Invite</button>
+                  </div>
+                  <div style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 4px;">Workspace ID Address:</div>
+                  <code x-text="activeWorkspace.id"></code>
+
+                  <div style="margin-top: 16px;">
+                    <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Workspace Member List:</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+                      <template x-for="mId in activeWorkspace.members" :key="mId">
+                        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                          <code style="font-size: 0.8rem;" x-text="mId === participant.id ? 'You (' + mId.substring(0, 10) + '...)' : mId.substring(0, 10) + '...'"></code>
+                          <template x-if="mId !== participant.id">
+                            <button class="action-btn" style="font-size: 0.7rem; padding: 2px 6px; background: #475569;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0, 6)); alert('Member added to Default pool!')">Add to Contacts</button>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
               <div class="info-box">
                 <h4>Identity Address (κ)</h4>
                 <code x-text="participant.id"></code>
@@ -89,6 +130,68 @@
             </div>
           </template>
 
+          <!-- Contacts & Pools View -->
+          <template x-if="activeTab === 'contacts'">
+            <div style="display: flex; gap: 20px; width: 100%; height: 100%;">
+              <!-- Pools pane -->
+              <div class="info-box" style="width: 200px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; height: fit-content;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 0.8rem; font-weight: bold; text-transform: uppercase;">Pools</span>
+                  <button class="action-btn" style="padding: 2px 6px; font-size: 0.75rem;" @click="createPool()">+</button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <div class="nav-item" :class="{ 'active': selectedPoolId === 'all' }" @click="selectedPoolId = 'all'">Show All</div>
+                  <template x-for="pool in contactPools" :key="pool.id">
+                    <div class="nav-item" :class="{ 'active': selectedPoolId === pool.id }" @click="selectedPoolId = pool.id" x-text="pool.name"></div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Contacts pane -->
+              <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <h4 style="margin: 0; font-size: 1rem; color: white;">Contacts Directory</h4>
+                  <button class="action-btn" style="font-size: 0.75rem;" @click="newContactId = prompt('Enter public key κ:'); newContactCurveId = prompt('Enter exchange key:'); newContactAlias = prompt('Enter alias:'); createContact()">Add Contact Manually</button>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                  <template x-for="c in contacts.filter(c => selectedPoolId === 'all' || c.pools?.includes(selectedPoolId))" :key="c.id">
+                    <div class="info-box" style="display: flex; flex-direction: column; gap: 8px;">
+                      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                          <div style="font-weight: bold; color: white;" x-text="c.name"></div>
+                          <code style="font-size: 0.75rem; color: #94a3b8;" x-text="'κ: ' + c.id"></code>
+                          <br/>
+                          <code style="font-size: 0.75rem; color: #94a3b8;" x-text="'ECDH: ' + c.curveId"></code>
+                        </div>
+                        <template x-if="c.id !== participant.id">
+                          <button class="action-btn" style="background: #ef4444; padding: 2px 6px; font-size: 0.7rem;" @click="deleteContact(c.id)">Delete</button>
+                        </template>
+                      </div>
+                      
+                      <!-- Pool tags selection -->
+                      <div style="display: flex; align-items: center; gap: 6px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 6px; margin-top: 4px;">
+                        <span style="font-size: 0.7rem; color: #64748b;">Pools:</span>
+                        <template x-for="p in contactPools" :key="p.id">
+                          <button 
+                            class="action-btn" 
+                            :style="{
+                              fontSize: '0.65rem',
+                              padding: '2px 6px',
+                              background: c.pools?.includes(p.id) ? '#6366f1' : '#1e293b'
+                            }"
+                            @click="toggleContactPool(c.id, p.id)"
+                            x-text="p.name"
+                          ></button>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+
           <!-- Active Messenger Channel View -->
           <template x-if="activeTab === 'channel'">
             <div class="messenger-box">
@@ -97,11 +200,39 @@
           </template>
         </div>
       </div>
+    </div>
   </template>
 </div>
+
 <script type="module">
-  import { Participant, Event, Collection, App, canonicalJson, sha256, HoloAppsCrypto } from "assets/scripts/holo-apps.js";
-  import { messengerReducer, createMessengerApp } from "assets/scripts/holo-messenger.js";
+  const origin = window.location.origin;
+  const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : "";
+  const { Participant, Event, Collection, App, canonicalJson, sha256, HoloAppsCrypto, base64Encode, base64Decode } = await import(`${origin}${base}/assets/scripts/holo-apps.js`);
+  const { messengerReducer, createMessengerApp } = await import(`${origin}${base}/assets/scripts/holo-messenger.js`);
+
+  export function workspaceReducer(state = { name: "", channels: [], members: [] }, event) {
+    const payload = event.body.payload || {};
+    const type = payload.type || "";
+    const eventKind = event.header.kind;
+    
+    if (eventKind === "genesis" || type === "Group") {
+      state.name = payload.name || "Unnamed Workspace";
+      state.channels = payload.channels || [];
+      state.members = payload.members || [event.header.author];
+    } else if (eventKind === "add-channel" || (type === "Add" && payload.object?.type === "Conversation")) {
+      const chId = payload.object?.id || payload.id;
+      const chName = payload.object?.name || payload.name;
+      if (chId && !state.channels.some(c => c.id === chId)) {
+        state.channels.push({ id: chId, name: chName });
+      }
+    } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person")) {
+      const memberId = payload.object?.id || payload.id;
+      if (memberId && !state.members.includes(memberId)) {
+        state.members.push(memberId);
+      }
+    }
+    return state;
+  }
 
   export default {
     mixins: [],
@@ -113,6 +244,23 @@
     installedAppIds: [],
     topBarTitle: "Dashboard",
     importInput: "",
+
+    // Workspaces
+    workspaces: [],
+    activeWorkspace: null,
+
+    // Contacts & Pools
+    contacts: [],
+    contactPools: [],
+    selectedPoolId: "all",
+
+    newWorkspaceName: "",
+    newChannelName: "",
+    newContactAlias: "",
+    newContactId: "",
+    newContactCurveId: "",
+    newPoolName: "",
+    inviteCodeInput: "",
 
     async init() {
       // Restore or generate participant identity
@@ -133,7 +281,546 @@
       const mockManifest = await createMessengerApp(this.participant);
       this.indexApps = [mockManifest];
       this.installedAppIds = JSON.parse(localStorage.getItem("holoapps_installed_apps") || "[]");
-      await this.loadChannels();
+      // Pre-install messenger app by default if list is empty
+      if (this.installedAppIds.length === 0) {
+        this.installedAppIds.push(mockManifest.id);
+        localStorage.setItem("holoapps_installed_apps", JSON.stringify(this.installedAppIds));
+      }
+      
+      await this.loadContactsAndPools();
+      await this.loadWorkspaces();
+    },
+
+    // Contacts & Pools
+    async loadContactsAndPools() {
+      const defaultPools = [
+        {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Collection",
+          "id": "pool:default",
+          "name": "Default"
+        },
+        {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Collection",
+          "id": "pool:work",
+          "name": "Work"
+        },
+        {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Collection",
+          "id": "pool:friends",
+          "name": "Friends"
+        }
+      ];
+      
+      const savedPools = localStorage.getItem("holoapps_contact_pools");
+      if (savedPools) {
+        this.contactPools = JSON.parse(savedPools);
+      } else {
+        this.contactPools = defaultPools;
+        localStorage.setItem("holoapps_contact_pools", JSON.stringify(this.contactPools));
+      }
+
+      const savedContacts = localStorage.getItem("holoapps_contacts");
+      if (savedContacts) {
+        this.contacts = JSON.parse(savedContacts);
+      } else {
+        const selfContact = {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Person",
+          "id": this.participant.id,
+          "name": "Me (Operator)",
+          "curveId": this.participant.curveId,
+          "pools": ["pool:default"]
+        };
+        this.contacts = [selfContact];
+        localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      }
+    },
+
+    createContact() {
+      if (!this.newContactId || !this.newContactCurveId) return;
+      const newPerson = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Person",
+        "id": this.newContactId.trim(),
+        "name": this.newContactAlias.trim() || "Contact " + this.newContactId.substring(0, 6),
+        "curveId": this.newContactCurveId.trim(),
+        "pools": ["pool:default"]
+      };
+      this.contacts = this.contacts.filter(c => c.id !== newPerson.id);
+      this.contacts.push(newPerson);
+      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      
+      this.newContactId = "";
+      this.newContactCurveId = "";
+      this.newContactAlias = "";
+    },
+
+    discoverContact(id, curveId, alias) {
+      if (id === this.participant.id) return;
+      const exists = this.contacts.find(c => c.id === id);
+      if (exists) {
+        if (curveId && exists.curveId !== curveId) {
+          exists.curveId = curveId;
+          localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+        }
+        return;
+      }
+      const newPerson = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Person",
+        "id": id,
+        "name": alias || "Operator " + id.substring(0, 8),
+        "curveId": curveId || "",
+        "pools": ["pool:default"]
+      };
+      this.contacts.push(newPerson);
+      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      console.log("Discovered contact automatically in shell-block:", id);
+    },
+
+    deleteContact(contactId) {
+      this.contacts = this.contacts.filter(c => c.id !== contactId);
+      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+    },
+
+    createPool() {
+      const name = prompt("Enter Pool Name:");
+      if (!name) return;
+      const newPool = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Collection",
+        "id": "pool:" + crypto.randomUUID(),
+        "name": name
+      };
+      this.contactPools.push(newPool);
+      localStorage.setItem("holoapps_contact_pools", JSON.stringify(this.contactPools));
+    },
+
+    toggleContactPool(contactId, poolId) {
+      const contact = this.contacts.find(c => c.id === contactId);
+      if (!contact) return;
+      if (!contact.pools) contact.pools = [];
+      
+      if (contact.pools.includes(poolId)) {
+        contact.pools = contact.pools.filter(p => p !== poolId);
+      } else {
+        contact.pools.push(poolId);
+      }
+      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+    },
+
+    // Workspaces
+    async loadWorkspaces() {
+      const saved = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+      this.workspaces = [];
+      
+      for (const wsRef of saved) {
+        const col = new Collection(wsRef.id, workspaceReducer);
+        const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${wsRef.id}`) || "[]");
+        for (const evId of eventIds) {
+          const raw = localStorage.getItem(`holoapps_event:${evId}`);
+          if (raw) {
+            const evData = JSON.parse(raw);
+            const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+            await col.addEvent(ev);
+          }
+        }
+        
+        const state = await col.render();
+        this.workspaces.push({
+          id: wsRef.id,
+          name: state.name || wsRef.name,
+          collection: col,
+          channels: state.channels || [],
+          members: state.members || []
+        });
+      }
+
+      if (this.workspaces.length === 0) {
+        await this.bootstrapDefaultWorkspace();
+      } else {
+        this.activeWorkspace = this.workspaces[0];
+        this.channels = this.activeWorkspace.channels;
+      }
+    },
+
+    async bootstrapDefaultWorkspace() {
+      console.log("Bootstrapping default workspace in shell-block...");
+      // 1. Create general channel genesis
+      const genChanGenesis = await Event.create({
+        kind: "genesis",
+        author: this.participant.id,
+        collectionId: "temp-channel-general",
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Conversation",
+          "name": "general",
+          "timestamp": Date.now()
+        }
+      }, this.participant);
+      genChanGenesis.header.collection = genChanGenesis.id;
+      const genSignPayload = canonicalJson({ header: genChanGenesis.header, body: genChanGenesis.body });
+      genChanGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, genSignPayload);
+      genChanGenesis.id = await sha256(genSignPayload);
+      this.saveEvent(genChanGenesis);
+      this.saveChannelRef(genChanGenesis.id, "general");
+
+      // 2. Create workspace genesis
+      const wsGenesis = await Event.create({
+        kind: "genesis",
+        author: this.participant.id,
+        collectionId: "temp-workspace-genesis",
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Group",
+          "name": "Local Swarm",
+          "channels": [
+            { "type": "Conversation", "id": genChanGenesis.id, "name": "general" }
+          ],
+          "members": [this.participant.id]
+        }
+      }, this.participant);
+      wsGenesis.header.collection = wsGenesis.id;
+      const wsSignPayload = canonicalJson({ header: wsGenesis.header, body: wsGenesis.body });
+      wsGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, wsSignPayload);
+      wsGenesis.id = await sha256(wsSignPayload);
+      this.saveEvent(wsGenesis);
+
+      // Save references
+      const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+      savedRefs.push({ id: wsGenesis.id, name: "Local Swarm" });
+      localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+
+      const col = new Collection(wsGenesis.id, workspaceReducer);
+      await col.addEvent(wsGenesis);
+      const state = await col.render();
+      
+      const wsObj = {
+        id: wsGenesis.id,
+        name: "Local Swarm",
+        collection: col,
+        channels: state.channels || [],
+        members: state.members || []
+      };
+      
+      this.workspaces.push(wsObj);
+      this.activeWorkspace = wsObj;
+      this.channels = wsObj.channels;
+    },
+
+    async createWorkspacePrompt() {
+      const name = prompt("Enter Workspace Name:");
+      if (!name) return;
+
+      // 1. Create general channel
+      const genChanGenesis = await Event.create({
+        kind: "genesis",
+        author: this.participant.id,
+        collectionId: "temp-channel-gen",
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Conversation",
+          "name": "general",
+          "timestamp": Date.now()
+        }
+      }, this.participant);
+      genChanGenesis.header.collection = genChanGenesis.id;
+      const genSignPayload = canonicalJson({ header: genChanGenesis.header, body: genChanGenesis.body });
+      genChanGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, genSignPayload);
+      genChanGenesis.id = await sha256(genSignPayload);
+      this.saveEvent(genChanGenesis);
+      this.saveChannelRef(genChanGenesis.id, "general");
+
+      // 2. Create workspace
+      const wsGenesis = await Event.create({
+        kind: "genesis",
+        author: this.participant.id,
+        collectionId: "temp-workspace-genesis",
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Group",
+          "name": name,
+          "channels": [
+            { "type": "Conversation", "id": genChanGenesis.id, "name": "general" }
+          ],
+          "members": [this.participant.id]
+        }
+      }, this.participant);
+      wsGenesis.header.collection = wsGenesis.id;
+      const wsSignPayload = canonicalJson({ header: wsGenesis.header, body: wsGenesis.body });
+      wsGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, wsSignPayload);
+      wsGenesis.id = await sha256(wsSignPayload);
+      this.saveEvent(wsGenesis);
+
+      const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+      savedRefs.push({ id: wsGenesis.id, name: name });
+      localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+
+      const col = new Collection(wsGenesis.id, workspaceReducer);
+      await col.addEvent(wsGenesis);
+      const state = await col.render();
+      
+      const wsObj = {
+        id: wsGenesis.id,
+        name: name,
+        collection: col,
+        channels: state.channels || [],
+        members: state.members || []
+      };
+      
+      this.workspaces.push(wsObj);
+      this.activeWorkspace = wsObj;
+      this.channels = wsObj.channels;
+    },
+
+    async createChannelPrompt() {
+      if (!this.activeWorkspace) return;
+      const name = prompt("Enter Channel Name:");
+      if (!name) return;
+
+      // 1. Genesis event
+      const genChanGenesis = await Event.create({
+        kind: "genesis",
+        author: this.participant.id,
+        collectionId: "temp-channel-custom",
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Conversation",
+          "name": name,
+          "timestamp": Date.now()
+        }
+      }, this.participant);
+      genChanGenesis.header.collection = genChanGenesis.id;
+      const genSignPayload = canonicalJson({ header: genChanGenesis.header, body: genChanGenesis.body });
+      genChanGenesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, genSignPayload);
+      genChanGenesis.id = await sha256(genSignPayload);
+      this.saveEvent(genChanGenesis);
+      this.saveChannelRef(genChanGenesis.id, name);
+
+      // 2. Add channel to workspace
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const addEvent = await Event.create({
+        kind: "add-channel",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Add",
+          "object": {
+            "type": "Conversation",
+            "id": genChanGenesis.id,
+            "name": name
+          },
+          "target": {
+            "type": "Group",
+            "id": wsCol.id
+          }
+        }
+      }, this.participant);
+
+      await wsCol.addEvent(addEvent);
+      this.saveEvent(addEvent);
+
+      const state = await wsCol.render();
+      this.activeWorkspace.channels = state.channels;
+      this.channels = state.channels;
+    },
+
+    async addMemberToActiveWorkspace() {
+      if (!this.activeWorkspace) return;
+      const memberId = prompt("Enter Member's Public Key (κ):");
+      if (!memberId) return;
+
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const addEvent = await Event.create({
+        kind: "add-member",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Add",
+          "object": {
+            "type": "Person",
+            "id": memberId
+          },
+          "target": {
+            "type": "Group",
+            "id": wsCol.id
+          }
+        }
+      }, this.participant);
+
+      await wsCol.addEvent(addEvent);
+      this.saveEvent(addEvent);
+
+      const state = await wsCol.render();
+      this.activeWorkspace.members = state.members;
+      
+      alert("Member added to workspace!");
+    },
+
+    async exportActiveWorkspaceInvite() {
+      if (!this.activeWorkspace) return;
+      try {
+        const wsCol = this.activeWorkspace.collection;
+        const allEvents = Array.from(wsCol.events.values()).map(ev => ({
+          header: ev.header,
+          body: ev.body,
+          signature: ev.signature,
+          id: ev.id
+        }));
+
+        const channelBundles = [];
+        for (const ch of this.activeWorkspace.channels) {
+          const chEventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+          const chEvents = [];
+          for (const evId of chEventIds) {
+            const raw = localStorage.getItem(`holoapps_event:${evId}`);
+            if (raw) chEvents.push(JSON.parse(raw));
+          }
+          channelBundles.push({
+            id: ch.id,
+            name: ch.name,
+            events: chEvents
+          });
+        }
+
+        const payload = {
+          type: "WorkspaceInvite",
+          id: wsCol.id,
+          name: this.activeWorkspace.name,
+          genesisEvent: allEvents.find(e => e.header.kind === "genesis"),
+          events: allEvents.filter(e => e.header.kind !== "genesis"),
+          channels: channelBundles
+        };
+
+        const serialized = base64Encode(JSON.stringify(payload));
+        prompt("Share this Workspace Invite Code:", serialized);
+      } catch (e) {
+        console.error(e);
+        alert("Failed to export workspace invite.");
+      }
+    },
+
+    async joinWorkspacePrompt() {
+      const code = prompt("Paste Workspace Invite Code:");
+      if (!code) return;
+      try {
+        const payload = JSON.parse(base64Decode(code.trim()));
+        if (payload && payload.type === "WorkspaceInvite" && payload.id && payload.genesisEvent) {
+          const gData = payload.genesisEvent;
+          const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
+          
+          const col = new Collection(genesis.id, workspaceReducer);
+          await col.addEvent(genesis);
+          this.saveEvent(genesis);
+
+          if (payload.events) {
+            for (const evData of payload.events) {
+              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+              await col.addEvent(ev);
+              this.saveEvent(ev);
+            }
+          }
+
+          if (payload.channels) {
+            for (const chBundle of payload.channels) {
+              this.saveChannelRef(chBundle.id, chBundle.name);
+              for (const evData of chBundle.events) {
+                const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+                this.saveEvent(ev);
+              }
+            }
+          }
+
+          const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+          if (!savedRefs.some(w => w.id === genesis.id)) {
+            savedRefs.push({ id: genesis.id, name: payload.name || "Joined Workspace" });
+            localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+          }
+
+          const state = await col.render();
+          const wsObj = {
+            id: genesis.id,
+            name: payload.name || "Joined Workspace",
+            collection: col,
+            channels: state.channels || [],
+            members: state.members || []
+          };
+
+          this.workspaces.push(wsObj);
+          this.activeWorkspace = wsObj;
+          this.channels = wsObj.channels;
+          
+          alert("Joined workspace successfully!");
+        } else {
+          // Fallback to legacy single channel invite code
+          const gData = payload.genesisEvent;
+          const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
+          
+          const col = new Collection(genesis.id, messengerReducer);
+          await col.addEvent(genesis);
+          this.saveEvent(genesis);
+          this.saveChannelRef(genesis.id, payload.name || "Joined Channel");
+
+          if (payload.events) {
+            for (const evData of payload.events) {
+              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+              await col.addEvent(ev);
+              this.saveEvent(ev);
+            }
+          }
+
+          for (const ev of col.events.values()) {
+            if (ev.header.kind === "epoch") {
+              await col.unwrapAndStoreEpochKey(ev, this.participant);
+            }
+          }
+
+          this.channels.push({
+            id: genesis.id,
+            name: payload.name || "Joined Channel",
+            collection: col
+          });
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Invalid invite format.");
+      }
+    },
+
+    selectWorkspace(ws) {
+      this.activeWorkspace = ws;
+      this.channels = ws.channels;
+      this.activeChannel = null;
+      this.activeTab = "dashboard";
+      this.topBarTitle = `Workspace: ${ws.name}`;
+    },
+
+    // Legacy loading fallback
+    async loadChannels() {
+      await this.loadWorkspaces();
     },
 
     async generateKeys() {
@@ -150,7 +837,7 @@
     async importKeys() {
       if (!this.importInput) return;
       try {
-        const jwkObj = JSON.parse(atob(this.importInput.trim()));
+        const jwkObj = JSON.parse(base64Decode(this.importInput.trim()));
         const p = await Participant.importJwk(jwkObj);
         this.participant = p;
         localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwkObj));
@@ -170,7 +857,7 @@
     async exportIdentity() {
       try {
         const jwkObj = await this.participant.exportJwk();
-        const serialized = btoa(JSON.stringify(jwkObj));
+        const serialized = base64Encode(JSON.stringify(jwkObj));
         prompt("Copy this Complete Backup Payload (Base64-encoded JWKs):", serialized);
       } catch (e) {
         console.error(e);
@@ -187,30 +874,6 @@
       }
     },
 
-    async loadChannels() {
-      const savedChannels = JSON.parse(localStorage.getItem("holoapps_channels") || "[]");
-      this.channels = [];
-      for (const ch of savedChannels) {
-        const col = new Collection(ch.id, messengerReducer);
-        
-        const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
-        for (const evId of eventIds) {
-          const raw = localStorage.getItem(`holoapps_event:${evId}`);
-          if (raw) {
-            const evData = JSON.parse(raw);
-            const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-            await col.addEvent(ev);
-          }
-        }
-        
-        this.channels.push({
-          id: ch.id,
-          name: ch.name,
-          collection: col
-        });
-      }
-    },
-
     isInstalled(appId) {
       return this.installedAppIds.includes(appId);
     },
@@ -219,76 +882,6 @@
       if (!this.isInstalled(app.id)) {
         this.installedAppIds.push(app.id);
         localStorage.setItem("holoapps_installed_apps", JSON.stringify(this.installedAppIds));
-      }
-    },
-
-    async createChannelPrompt() {
-      const name = prompt("Enter Channel Name:");
-      if (!name) return;
-
-      const genesis = await Event.create({
-        kind: "genesis",
-        author: this.participant.id,
-        collectionId: "temp-genesis-id",
-        payload: { name, timestamp: Date.now() }
-      }, this.participant);
-
-      genesis.header.collection = genesis.id;
-      const payloadToSign = canonicalJson({ header: genesis.header, body: genesis.body });
-      genesis.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, payloadToSign);
-      genesis.id = await sha256(payloadToSign);
-
-      const col = new Collection(genesis.id, messengerReducer);
-      await col.addEvent(genesis);
-
-      this.saveEvent(genesis);
-      this.saveChannelRef(genesis.id, name);
-
-      this.channels.push({
-        id: genesis.id,
-        name: name,
-        collection: col
-      });
-    },
-
-    async joinChannelPrompt() {
-      const invite = prompt("Paste Invite Code:");
-      if (!invite) return;
-      try {
-        const payload = JSON.parse(atob(invite.trim()));
-        if (payload && payload.id && payload.genesisEvent) {
-          const gData = payload.genesisEvent;
-          const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
-          
-          const col = new Collection(genesis.id, messengerReducer);
-          await col.addEvent(genesis);
-          this.saveEvent(genesis);
-          this.saveChannelRef(genesis.id, payload.name || "Joined Channel");
-
-          if (payload.events) {
-            for (const evData of payload.events) {
-              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-              await col.addEvent(ev);
-              this.saveEvent(ev);
-            }
-          }
-
-          // Unwrap and store epoch keys that we have access to
-          for (const ev of col.events.values()) {
-            if (ev.header.kind === "epoch") {
-              await col.unwrapAndStoreEpochKey(ev, this.participant);
-            }
-          }
-
-          this.channels.push({
-            id: genesis.id,
-            name: payload.name || "Joined Channel",
-            collection: col
-          });
-        }
-      } catch (e) {
-        console.error(e);
-        alert("Invalid invite payload");
       }
     },
 
@@ -406,6 +999,9 @@
     font-size: 0.9rem;
     color: #94a3b8;
     margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
   .nav-item:hover {
     background: rgba(99, 102, 241, 0.1);

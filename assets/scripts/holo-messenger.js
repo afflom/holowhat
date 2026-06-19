@@ -23,20 +23,30 @@ export function messengerReducer(events) {
   const messageMap = new Map(); // messageId -> Message object
 
   for (const ev of events) {
-    if (ev.kind === "message") {
+    const payload = ev.payload || {};
+    const type = payload.type || "";
+    
+    if (ev.kind === "message" || type === "Create") {
+      const body = payload.object?.content || payload.body;
+      const timestamp = payload.object?.published 
+        ? new Date(payload.object.published).getTime() 
+        : (payload.timestamp || Date.now());
+      const parentId = payload.object?.inReplyTo || payload.parentId || null;
+      
       messageMap.set(ev.id, {
         id: ev.id,
         author: ev.author,
         clock: ev.clock,
-        body: ev.payload.body,
-        parentId: ev.payload.parentId || null,
-        timestamp: ev.payload.timestamp || Date.now(),
+        body: body,
+        parentId: parentId,
+        timestamp: timestamp,
         reactions: new Map(), // symbol -> Set of authors
         edits: [], // Edit history [{ id, author, clock, body }]
         replies: [] // Reply message IDs
       });
-    } else if (ev.kind === "edit") {
-      const targetId = ev.payload.target;
+    } else if (ev.kind === "edit" || type === "Update") {
+      const targetId = payload.object?.id || payload.target;
+      const body = payload.object?.content || payload.body;
       if (messageMap.has(targetId)) {
         const msg = messageMap.get(targetId);
         // Only the original author can edit their message
@@ -45,15 +55,15 @@ export function messengerReducer(events) {
             id: ev.id,
             author: ev.author,
             clock: ev.clock,
-            body: ev.payload.body
+            body: body
           });
           // Update the current visible body text to the latest edit
-          msg.body = ev.payload.body;
+          msg.body = body;
         }
       }
-    } else if (ev.kind === "reaction") {
-      const targetId = ev.payload.target;
-      const symbol = ev.payload.symbol;
+    } else if (ev.kind === "reaction" || type === "Like") {
+      const targetId = payload.object || payload.target;
+      const symbol = payload.content || payload.symbol;
       if (messageMap.has(targetId)) {
         const msg = messageMap.get(targetId);
         if (!msg.reactions.has(symbol)) {
