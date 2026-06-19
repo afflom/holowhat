@@ -1,16 +1,12 @@
 name: pages
 
-# Strict GitHub Pages Build & Deployment Pipeline.
+# Strict GitHub Pages Deployment Pipeline gated by CI.
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'crates/holospaces-web/**'
-      - 'crates/holowhat-tools/**'
-      - 'scripts/build-site.sh'
-      - 'scripts/setup-vendor.sh'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,16 +17,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify-and-deploy:
-    name: Verify Code & Deploy Site
+  deploy:
+    name: Build & Deploy Site
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
           targets: wasm32-unknown-unknown
 
       - name: Setup Rust Cache
@@ -44,35 +40,10 @@ jobs:
           chmod +x scripts/setup-vendor.sh
           ./scripts/setup-vendor.sh
 
-      - name: Check code format
-        run: cargo fmt --check
-
-      - name: Run clippy lints
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Run workspace tests
-        run: cargo test --workspace
-
       - name: Build and assemble site
         run: |
           chmod +x scripts/build-site.sh
           ./scripts/build-site.sh
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install Playwright
-        run: |
-          npm install
-          npx --yes playwright install --with-deps chromium chromium-headless-shell
-
-      - name: Run Playwright E2E test
-        run: |
-          node scripts/playground-test.mjs
-
-
 
       - name: Deploy to the gh-pages root (production)
         uses: JamesIves/github-pages-deploy-action@v4
