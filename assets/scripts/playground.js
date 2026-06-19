@@ -51,7 +51,8 @@ await initializeWasm(
 // 2. Initialize Holospaces Substrate
 await init();
 const console0 = new Console();
-const opId = console0.sign_in(new TextEncoder().encode("playground-operator"));
+const identityKey = localStorage.getItem("holoapps_identity_key") || "playground-operator";
+const opId = console0.sign_in(new TextEncoder().encode(identityKey));
 console.log("Holospaces Substrate Peer online. Signed in as operator:", opId);
 
 window.lock = false

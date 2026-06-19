@@ -19,9 +19,25 @@
   >
     <div @click.stop="" class="card login-card">
       <!-- Local-first/offline option -->
-      <flex-block :style="{ flexDirection: 'column', alignItems: 'center' }">
+      <flex-block :style="{ flexDirection: 'column', alignItems: 'center', width: '100%' }">
         <img class="logo" src="assets/img/favicon.svg" />
         <h1>Playground</h1>
+        
+        <!-- Active Identity Status -->
+        <div style="margin-top: 16px; margin-bottom: 8px; width: 100%; text-align: center;">
+          <template x-if="hasIdentity">
+            <div style="background: rgba(44, 191, 94, 0.1); border: 1px solid rgba(44, 191, 94, 0.3); padding: 8px; border-radius: 6px; font-size: 0.9rem; color: #2cbf5e;">
+              Active Identity Loaded: <br/>
+              <code style="font-family: monospace; font-size: 0.8rem; word-break: break-all;" x-text="identityAbbr"></code>
+            </div>
+          </template>
+          <template x-if="!hasIdentity">
+            <div style="background: rgba(114, 137, 218, 0.1); border: 1px solid rgba(114, 137, 218, 0.3); padding: 8px; border-radius: 6px; font-size: 0.9rem; color: #7289da;">
+              No local identity found. A new secure P-256 keypair will be generated in your browser.
+            </div>
+          </template>
+        </div>
+
         <button class="local-btn" @click="localLogin">
           Continue Local-First
         </button>
@@ -29,84 +45,25 @@
           Your data is stored locally. No sign up required.
         </div>
       </flex-block>
+
+      <!-- Import Identity Section -->
       <hr class="divider" />
-      <flex-block :style="{ width: '100%' }">
+      <flex-block :style="{ flexDirection: 'column', width: '100%', gap: '8px' }">
+        <div style="font-size: 0.9rem; font-weight: bold; color: #555;">Import Identity Backup</div>
         <input
-          x-show="state !== 'recover'"
-          x-model="email"
-          placeholder="Email"
-          autocomplete="username"
+          x-model="importInput"
+          placeholder="Paste Backup Payload (Base64)"
+          style="font-size: 0.9rem !important;"
         />
-      </flex-block>
-      <flex-block
-        :style="{ position: 'relative', width: '100%', alignItems: 'center' }"
-      >
-        <input
-          @keydown.enter="onClick"
-          x-show="state !== 'reset'"
-          x-model="password"
-          :type="showPassword ? 'text' : 'password'"
-          placeholder="Password"
-          :autocomplete="state === 'create' ? 'new-password' : 'current-password'"
-        />
-        <img
-          @click="showPassword = !showPassword"
-          :style="{
-            position: 'absolute',
-            right: '12px',
-            cursor: 'pointer',
-            width: '20px',
-          }"
-          src="assets/img/eye-alt.svg"
-        />
-      </flex-block>
-      <template x-if="state === 'recover'">
-        <flex-block :style="{ width: '100%' }">
-          <input
-            x-show="state !== 'reset'"
-            x-model="confirmPassword"
-            :type="showPasswordConfirm ? 'text' : 'password'"
-            placeholder="Confirm Password"
-            autocomplete="new-password"
-          />
-          <img
-            @click="showPasswordConfirm = !showPasswordConfirm"
-            :style="{
-              position: 'absolute',
-              right: '12px',
-              cursor: 'pointer',
-              width: '20px',
-            }"
-            src="assets/img/eye-alt.svg"
-          />
-        </flex-block>
-      </template>
-      <flex-block :style="{ width: '100%', flexDirection: 'column' }">
         <button
           class="login-button"
-          @click="onClick"
-          x-text="state === 'recover' ? 'Update Password' : state === 'reset' ? 'Reset Password' : state === 'create' ? 'Get Started' : 'Login'"
-        ></button>
+          @click="importKeys"
+          :disabled="!importInput"
+          style="background: #7289da; color: white;"
+        >Import Identity</button>
         <div class="messages">
           <div class="error" x-text="errorMessage"></div>
           <div class="success" x-text="successMessage"></div>
-        </div>
-        <div :style="{ marginTop: '8px'}">
-          <template x-if="state !== 'create'">
-            <div :style="{ textAlign: 'center' }">
-              Don't have an account?
-              <br />
-              <span @click="state = 'create'">Get started</span>
-              or
-              <span @click="state = 'reset'">Reset your password</span>
-            </div>
-          </template>
-          <template x-if="state === 'create'">
-            <div>
-              Have an account already?
-              <span @click="state = 'login'">Login</span>
-            </div>
-          </template>
         </div>
       </flex-block>
     </div>
@@ -142,63 +99,61 @@
     enableBodyScroll,
     disableBodyScroll,
   } from "https://esm.sh/body-scroll-lock@4.0.0-beta.0"
-  import { createClient } from "https://esm.sh/@supabase/supabase-js@2.94.1"
 
-  const supabase = createClient(
-    "https://ifteoortevgzwvlbkjev.supabase.co",
-    "sb_publishable_HVSLUqC4MdXCJzTbbJR24w_ylDOODOF",
-  )
+  const origin = window.location.origin
+  const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : ""
+  const { Participant, base64Decode } = await import(`${origin}${base}/assets/scripts/holo-apps.js`)
 
   export default {
     mixins: [],
     showLogin: false,
     showAbout: false,
-    state: "login", // login | reset | create | recover
-    params: null,
+    hasIdentity: false,
+    identityAbbr: "",
+    importInput: "",
     errorMessage: "",
     successMessage: "",
-    showPassword: false,
-    showPasswordConfirm: false,
-    email: "",
-    password: "",
-    confirmPassword: "",
     lockScroll: disableBodyScroll,
     unlockScroll: enableBodyScroll,
     async init() {
-      if (
-        location.hash.includes("access_token") ||
-        location.hash.includes("error")
-      ) {
-        this.params = new URLSearchParams(location.hash.slice(1))
-
-        if (this.params.get("error_description")) {
-          this.errorMessage = this.params.get("error_description")
-        }
-        if (this.params.get("type") === "recovery") {
-          this.state = "recover"
-
-          const { data, error } = await supabase.auth.setSession({
-            access_token: this.params.get("access_token"),
-            refresh_token: this.params.get("refresh_token"),
-          })
-
-          if (error) {
-            this.errorMessage = "Something went wrong."
-            this.state = "reset"
-          }
-        } else if (this.params.get("type") === "signup") {
-          this.successMessage = "Validated email! You may now login"
-        }
+      const savedJwk = localStorage.getItem("holoapps_participant_jwk")
+      const savedId = localStorage.getItem("holoapps_identity_key")
+      if (savedJwk && savedId) {
+        this.hasIdentity = true
+        this.identityAbbr = savedId.substring(0, 16) + "..."
+        // Automatically proceed if identity from Holo-Apps exists
+        this.localLogin()
       }
     },
     async localLogin() {
-      const user = localStorage.getItem("user")
+      this.errorMessage = ""
+      this.successMessage = ""
+      
+      // 1. Generate keys if not present
+      let savedJwk = localStorage.getItem("holoapps_participant_jwk")
+      if (!savedJwk) {
+        try {
+          const p = await Participant.create()
+          const jwk = await p.exportJwk()
+          localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwk))
+          localStorage.setItem("holoapps_identity_key", p.id)
+          localStorage.setItem("holoapps_curve_key", p.curveId)
+          this.hasIdentity = true
+          this.identityAbbr = p.id.substring(0, 16) + "..."
+          console.log("Generated login-block identity:", p.id)
+        } catch (e) {
+          console.error("Failed to generate identity:", e)
+          this.errorMessage = "Failed to generate keys locally."
+          return
+        }
+      }
 
+      // 2. Playwright session local storage sync (repo setup)
+      const user = localStorage.getItem("user")
       if (!user) {
         const userHandle = await repo.create({
           worlds: [],
         })
-
         localStorage.setItem("user", userHandle.documentId)
       }
 
@@ -217,104 +172,25 @@
         window.location.href = "worlds.html"
       }, 1000)
     },
-    onClick() {
-      if (this.state === "recover") {
-        this.updatePassword()
-      } else if (this.state === "reset") {
-        this.reset()
-      } else if (this.state === "create") {
-        this.signUp()
-      } else {
-        this.signIn()
-      }
-    },
-    async reset() {
+    async importKeys() {
+      if (!this.importInput) return
       this.errorMessage = ""
       this.successMessage = ""
-
-      const { data, error } = await supabase.auth.resetPasswordForEmail(
-        this.email,
-        {
-          redirectTo: location.origin,
-        },
-      )
-
-      if (error) {
-        this.errorMessage = error.message
-      } else {
-        this.successMessage = "Check your email"
+      try {
+        const jwkObj = JSON.parse(base64Decode(this.importInput.trim()))
+        const p = await Participant.importJwk(jwkObj)
+        localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwkObj))
+        localStorage.setItem("holoapps_identity_key", p.id)
+        localStorage.setItem("holoapps_curve_key", p.curveId)
+        this.hasIdentity = true
+        this.identityAbbr = p.id.substring(0, 16) + "..."
+        this.successMessage = "Identity imported successfully!"
+        this.importInput = ""
+      } catch (e) {
+        console.error(e)
+        this.errorMessage = "Failed to import. Check format."
       }
-    },
-    async signIn() {
-      this.errorMessage = ""
-      this.successMessage = ""
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: this.email,
-        password: this.password,
-      })
-
-      if (error) {
-        this.errorMessage = error.message
-      }
-
-      // Authenticate with Playground
-      this.setToken(data)
-    },
-    async signUp() {
-      this.errorMessage = ""
-      this.successMessage = ""
-
-      const { data, error } = await supabase.auth.signUp({
-        email: this.email,
-        password: this.password,
-        options: {
-          emailRedirectTo: location.origin,
-        },
-      })
-
-      if (error) {
-        this.errorMessage = error.message
-      } else {
-        this.successMessage = "Success! Check your email"
-      }
-    },
-    async updatePassword() {
-      this.errorMessage = ""
-      this.successMessage = ""
-
-      if (this.password !== this.confirmPassword) {
-        this.errorMessage = "Password don't match"
-        return
-      }
-
-      const { data, error } = await supabase.auth.updateUser({
-        password: this.password,
-      })
-
-      if (error) {
-        this.errorMessage = error.message
-        return
-      } else {
-        this.successMessage = "Success! You may now login"
-      }
-
-      this.state = "login"
-    },
-    async setToken(data) {
-      await fetch("/api/auth/set-session", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at, // unix seconds
-        }),
-      })
-
-      window.location.href = "worlds.html"
-    },
+    }
   }
 </script>
 

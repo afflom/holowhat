@@ -32,6 +32,7 @@ export function messengerReducer(events) {
         ? new Date(payload.object.published).getTime() 
         : (payload.timestamp || Date.now());
       const parentId = payload.object?.inReplyTo || payload.parentId || null;
+      const attachment = payload.object?.attachment || payload.attachment || null;
       
       messageMap.set(ev.id, {
         id: ev.id,
@@ -40,6 +41,7 @@ export function messengerReducer(events) {
         body: body,
         parentId: parentId,
         timestamp: timestamp,
+        attachment: attachment,
         reactions: new Map(), // symbol -> Set of authors
         edits: [], // Edit history [{ id, author, clock, body }]
         replies: [] // Reply message IDs

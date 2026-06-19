@@ -66,9 +66,9 @@
         <!-- Top status bar -->
         <div class="status-bar">
           <span class="title-lbl" x-text="topBarTitle">Dashboard</span>
-          <div class="user-pill">
+          <div class="user-pill" x-show="participant">
             <div class="green-dot"></div>
-            <span class="user-id" x-text="'Operator: ' + participant.id.substring(0, 10) + '...'"></span>
+            <span class="user-id" x-text="'Operator: ' + (participant ? participant.id.substring(0, 10) : '') + '...'"></span>
           </div>
         </div>
 
@@ -77,6 +77,7 @@
           <!-- Dashboard View -->
           <template x-if="activeTab === 'dashboard'">
             <div class="dashboard-view" style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+              <h3 style="font-size: 1.2rem; font-weight: 700; color: white; margin: 0; display: block;">Sovereign Cryptographic Profile</h3>
               <template x-if="activeWorkspace">
                 <div class="info-box">
                   <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 12px;">
@@ -91,8 +92,8 @@
                     <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
                       <template x-for="mId in activeWorkspace.members" :key="mId">
                         <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
-                          <code style="font-size: 0.8rem;" x-text="mId === participant.id ? 'You (' + mId.substring(0, 10) + '...)' : mId.substring(0, 10) + '...'"></code>
-                          <template x-if="mId !== participant.id">
+                          <code style="font-size: 0.8rem;" x-text="mId === (participant ? participant.id : '') ? 'You (' + mId.substring(0, 10) + '...)' : mId.substring(0, 10) + '...'"></code>
+                          <template x-if="mId !== (participant ? participant.id : '')">
                             <button class="action-btn" style="font-size: 0.7rem; padding: 2px 6px; background: #475569;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0, 6)); alert('Member added to Default pool!')">Add to Contacts</button>
                           </template>
                         </div>
@@ -104,11 +105,11 @@
 
               <div class="info-box">
                 <h4>Identity Address (κ)</h4>
-                <code x-text="participant.id"></code>
+                <code x-text="participant ? participant.id : ''"></code>
               </div>
               <div class="info-box">
                 <h4>ECDH Exchange Address</h4>
-                <code x-text="participant.curveId"></code>
+                <code x-text="participant ? participant.curveId : ''"></code>
               </div>
               <div style="display: flex; gap: 12px; margin-top: 12px;">
                 <button class="action-btn" @click="exportIdentity()">Export Backup Payload</button>
@@ -164,7 +165,7 @@
                           <br/>
                           <code style="font-size: 0.75rem; color: #94a3b8;" x-text="'ECDH: ' + c.curveId"></code>
                         </div>
-                        <template x-if="c.id !== participant.id">
+                        <template x-if="c.id !== (participant ? participant.id : '')">
                           <button class="action-btn" style="background: #ef4444; padding: 2px 6px; font-size: 0.7rem;" @click="deleteContact(c.id)">Delete</button>
                         </template>
                       </div>
@@ -212,11 +213,13 @@
 
   export function workspaceReducer(events) {
     const state = { name: "", channels: [], members: [] };
+    if (!events || !Array.isArray(events)) return state;
     for (const ev of events) {
-      const payload = ev.payload || (ev.body ? ev.body.payload : {}) || {};
+      if (!ev) continue;
+      const payload = ev.payload || (ev.body ? ev.body.payload : null) || ev.body?.cleartext || {};
       const type = payload.type || "";
-      const eventKind = ev.kind || (ev.header ? ev.header.kind : "");
-      const author = ev.author || (ev.header ? ev.header.author : "");
+      const eventKind = ev.kind || ev.header?.kind || "";
+      const author = ev.author || ev.header?.author || "";
       
       if (eventKind === "genesis" || type === "Group") {
         state.name = payload.name || "Unnamed Workspace";
@@ -462,7 +465,7 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;
@@ -528,7 +531,7 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;
@@ -594,7 +597,7 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": name,
-          "timestamp": Date.now()
+          "published": new Date().toISOString()
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;

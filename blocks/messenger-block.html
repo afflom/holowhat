@@ -1,51 +1,208 @@
 <div class="msg-wrapper" x-data="messengerBlock">
-  <!-- Messages List -->
-  <div class="messages-list" id="chat-scroller">
-    <template x-for="msg in view.messages" :key="msg.id">
-      <div class="message" :class="{ 'mine': msg.author === identity }">
-        <div class="meta">
-          <span class="author" x-text="msg.author === identity ? 'You' : msg.author.substring(0, 8)"></span>
-          <span class="time" x-text="new Date(msg.timestamp).toLocaleTimeString()"></span>
-          <template x-if="msg.edits.length > 0">
-            <span class="edited">(edited)</span>
-          </template>
-        </div>
-        <div class="body" x-text="msg.body"></div>
-
-        <!-- Reactions -->
-        <div class="reactions" x-show="msg.reactions.length > 0">
-          <template x-for="r in msg.reactions" :key="r.symbol">
-            <span class="badge" :class="{ 'active': r.authors.includes(identity) }" @click="toggleReact(msg, r.symbol)" x-text="r.symbol + ' ' + r.count"></span>
-          </template>
-        </div>
-
-        <!-- Actions -->
-        <div class="actions">
-          <button @click="toggleReact(msg, '👍')">👍</button>
-          <button @click="toggleReact(msg, '❤️')">❤️</button>
-          <template x-if="msg.author === identity">
-            <button @click="startEdit(msg)">Edit</button>
-          </template>
-        </div>
+  <!-- Header Bar -->
+  <div class="chat-header">
+    <div class="channel-info">
+      <span class="hash-tag">#</span>
+      <div class="channel-meta">
+        <h3 class="channel-name" x-text="getChannelName()">general</h3>
+        <span class="channel-topic">Swarm Ledger: <code class="channel-topic-id" x-text="(props.channelId || '').substring(0, 12) + '...'"></code></span>
       </div>
-    </template>
+    </div>
+    
+    <div class="header-actions">
+      <!-- Search Box -->
+      <div class="search-wrapper">
+        <input type="text" class="search-input" placeholder="Search in channel..." x-model="searchQuery" />
+        <template x-if="searchQuery">
+          <button class="clear-search-btn" @click="searchQuery = ''">×</button>
+        </template>
+      </div>
+
+      <!-- Member List Toggle Button -->
+      <button class="toggle-members-btn" @click="showMembersList = !showMembersList" :class="{ 'active': showMembersList }" title="Toggle Member List">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span class="member-count-badge" x-text="getChannelMembers().length">0</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Input Area -->
-  <div class="input-bar">
-    <input type="text" class="chat-input" placeholder="Send a message..." x-model="text" @keydown.enter="send()" />
-    <button class="send-btn" @click="send()">Send</button>
-    <button class="send-btn" style="background: #475569;" @click="invite()">Invite</button>
+  <div class="chat-main-area">
+    <!-- Messages & Logs Pane -->
+    <div class="timeline-pane">
+      <div class="messages-list" id="chat-scroller">
+        <template x-if="filteredTimeline.length === 0">
+          <div class="empty-state-container">
+            <div class="empty-state-icon">💬</div>
+            <h4>No messages found</h4>
+            <p>Type a message or adjust your search filter to get started.</p>
+          </div>
+        </template>
+        
+        <template x-for="item in filteredTimeline" :key="item.id">
+          <div>
+            <!-- SYSTEM LOG ELEMENT -->
+            <template x-if="item.isSystem">
+              <div class="system-log-row">
+                <div class="system-log-card">
+                  <span class="system-log-icon" x-text="item.type === 'genesis' ? '🔒' : (item.type === 'membership' ? '⚡' : '🔑')"></span>
+                  <div class="system-log-content">
+                    <span class="system-log-text" x-text="item.text"></span>
+                    <span class="system-log-time" x-text="new Date(item.timestamp).toLocaleTimeString()"></span>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- REGULAR CHAT MESSAGE ELEMENT -->
+            <template x-if="!item.isSystem">
+              <div class="message-row" :class="{ 'mine': item.author === identity }" :id="'msg-' + item.id">
+                
+                <!-- User Avatar -->
+                <div class="user-avatar" :style="getUserAvatarStyle(item.author)" x-text="getUserInitials(item.author)"></div>
+                
+                <div class="message-content">
+                  <!-- Meta header -->
+                  <div class="message-meta-header">
+                    <span class="message-author-name" x-text="getUserDisplayName(item.author)"></span>
+                    <span class="message-author-badge" x-text="item.author === identity ? 'You' : 'Member'"></span>
+                    <span class="message-time" x-text="new Date(item.timestamp).toLocaleString()"></span>
+                    <template x-if="item.edits.length > 0">
+                      <span class="message-edited-tag" :title="'Edited clock: ' + item.edits[item.edits.length-1].clock">(edited)</span>
+                    </template>
+                  </div>
+
+                  <!-- Reply Reference Header -->
+                  <template x-if="item.parentMsg">
+                    <div class="reply-reference-box" @click="scrollToMessage(item.parentMsg.id)">
+                      <span class="reply-arrow">↳</span>
+                      <span class="reply-author" x-text="getUserDisplayName(item.parentMsg.author) + ':'"></span>
+                      <span class="reply-body-snippet" x-text="item.parentMsg.body.substring(0, 60) + (item.parentMsg.body.length > 60 ? '...' : '')"></span>
+                    </div>
+                  </template>
+
+                  <!-- Message Body (supports rich format via x-html) -->
+                  <div class="message-body-text" x-html="formatMessageBody(item.body)"></div>
+
+                  <!-- Embedded Image Attachment -->
+                  <template x-if="item.attachment && item.attachment.type === 'Image'">
+                    <div class="attachment-preview-card">
+                      <img :src="item.attachment.url" class="embedded-image" @click="window.open(item.attachment.url, '_blank')" />
+                    </div>
+                  </template>
+
+                  <!-- Reactions Badges List -->
+                  <div class="reactions-list" x-show="item.reactions.length > 0">
+                    <template x-for="r in item.reactions" :key="r.symbol">
+                      <div class="reaction-badge" :class="{ 'active': r.authors.includes(identity) }" @click="toggleReact(item, r.symbol)">
+                        <span class="reaction-symbol" x-text="r.symbol"></span>
+                        <span class="reaction-count" x-text="r.count"></span>
+                        <div class="reaction-tooltip">
+                          <span x-text="r.authors.map(a => getUserDisplayName(a)).join(', ')"></span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Hover Toolbar Actions (Floating popover) -->
+                <div class="message-hover-toolbar">
+                  <div class="quick-reactions">
+                    <button class="toolbar-btn" @click="toggleReact(item, '👍')" title="React 👍">👍</button>
+                    <button class="toolbar-btn" @click="toggleReact(item, '❤️')" title="React ❤️">❤️</button>
+                    <button class="toolbar-btn" @click="toggleReact(item, '🔥')" title="React 🔥">🔥</button>
+                    <button class="toolbar-btn" @click="toggleReact(item, '🎉')" title="React 🎉">🎉</button>
+                    <button class="toolbar-btn" @click="toggleReact(item, '😂')" title="React 😂">😂</button>
+                  </div>
+                  <div class="toolbar-divider"></div>
+                  <button class="toolbar-action-btn" @click="setReply(item)" title="Reply to message">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"></polyline><path d="M20 18v-2a4 4 0 0 0-4-4H4"></path></svg>
+                  </button>
+                  <template x-if="item.author === identity">
+                    <button class="toolbar-action-btn" @click="startEdit(item)" title="Edit message">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path></svg>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
+      <!-- Reply Active Indicator Banner -->
+      <template x-if="replyingTo">
+        <div class="reply-active-banner">
+          <div class="reply-banner-content">
+            <span class="reply-label">Replying to <strong x-text="getUserDisplayName(replyingTo.author)"></strong>:</span>
+            <span class="reply-snippet" x-text="replyingTo.body.substring(0, 80) + (replyingTo.body.length > 80 ? '...' : '')"></span>
+          </div>
+          <button class="cancel-reply-btn" @click="replyingTo = null">×</button>
+        </div>
+      </template>
+
+      <!-- Attachment Preview Bar -->
+      <template x-if="attachedImageUrl">
+        <div class="attachment-active-banner">
+          <div class="attachment-banner-content">
+            <span class="attachment-label">📎 Attachment Image ready:</span>
+            <span class="attachment-url-snippet" x-text="attachedImageUrl.substring(0, 50) + '...'"></span>
+          </div>
+          <button class="cancel-attachment-btn" @click="attachedImageUrl = ''">×</button>
+        </div>
+      </template>
+
+      <!-- Input Actions Panel -->
+      <div class="input-actions-bar" x-show="showAttachmentInput">
+        <input type="text" class="attachment-url-input" placeholder="Paste Image URL here (e.g. https://domain.com/pic.png)..." x-model="attachmentUrlInput" @keydown.enter="applyAttachment()" />
+        <button class="apply-attachment-btn" @click="applyAttachment()">Add</button>
+        <button class="cancel-attachment-input-btn" @click="showAttachmentInput = false">Cancel</button>
+      </div>
+
+      <!-- Input Chat Bar -->
+      <div class="input-bar">
+        <button class="action-trigger-btn" @click="showAttachmentInput = !showAttachmentInput" :class="{ 'active': showAttachmentInput }" title="Attach Image Object">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+        </button>
+        
+        <input type="text" class="chat-input" placeholder="Type a message (supports markdown *italics* and **bold**)..." x-model="text" @keydown.enter="send()" />
+        <button class="send-btn" @click="send()" :disabled="!text && !attachedImageUrl">Send</button>
+        <button class="invite-btn" @click="invite()" title="Invite Operator to Channel">Invite Peer</button>
+      </div>
+    </div>
+
+    <!-- Right Side Roster Pane -->
+    <div class="members-sidebar-pane" x-show="showMembersList" x-transition>
+      <div class="sidebar-header-label">Workspace Roster</div>
+      <div class="members-scroller">
+        <template x-for="m in getChannelMembers()" :key="m.id">
+          <div class="member-card">
+            <div class="member-avatar-badge-row">
+              <div class="user-avatar" :style="getUserAvatarStyle(m.id)" x-text="getUserInitials(m.id)"></div>
+              <div class="member-details">
+                <span class="member-name" x-text="m.name"></span>
+                <span class="member-address" x-text="m.id.substring(0, 16) + '...'"></span>
+              </div>
+            </div>
+            <div class="member-caps-row">
+              <template x-for="cap in m.capabilities" :key="cap">
+                <span class="cap-badge" :class="cap" x-text="cap"></span>
+              </template>
+            </div>
+            <button class="inspect-did-btn" @click="inspectDid(m.id)">Inspect W3C DID</button>
+          </div>
+        </template>
+      </div>
+    </div>
   </div>
 
-  <!-- Edit Modal -->
+  <!-- Edit Dialog overlay -->
   <template x-if="editing">
     <div class="edit-overlay">
-      <div class="edit-dialog">
+      <div class="edit-dialog glass">
         <h4>Edit Message</h4>
-        <input type="text" class="chat-input" x-model="editText" />
+        <input type="text" class="chat-input" x-model="editText" @keydown.enter="saveEdit()" />
         <div class="edit-buttons">
-          <button class="send-btn" @click="saveEdit()">Save</button>
+          <button class="send-btn" @click="saveEdit()">Save Changes</button>
           <button class="send-btn cancel" @click="editing = null">Cancel</button>
         </div>
       </div>
@@ -68,6 +225,14 @@
     text: "",
     editing: null,
     editText: "",
+    
+    // Roster & Layout variables
+    showMembersList: true,
+    searchQuery: "",
+    replyingTo: null,
+    attachedImageUrl: "",
+    showAttachmentInput: false,
+    attachmentUrlInput: "",
 
     async init() {
       this.identity = localStorage.getItem("holoapps_identity_key") || "";
@@ -76,6 +241,19 @@
       this._pollInterval = setInterval(async () => {
         await this.refresh();
       }, 1000);
+      
+      // Auto scroll to bottom on initialize
+      this.$nextTick(() => {
+        this.scrollToBottom();
+      });
+
+      // Warm up StandardsValidator context schemas
+      try {
+        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
+        await StandardsValidator.init(`${origin}${base}/`);
+      } catch (e) {
+        console.error("Failed to initialize StandardsValidator context in init:", e);
+      }
     },
 
     destroy() {
@@ -102,6 +280,13 @@
       return ch ? ch.collection : null;
     },
 
+    getChannelName() {
+      const shell = this.getShell();
+      if (!shell) return "general";
+      const ch = shell.channels.find(c => c.id === this.channelId);
+      return ch ? ch.name : "general";
+    },
+
     async refresh() {
       const col = this.getCollection();
       if (col) {
@@ -119,8 +304,257 @@
       }
     },
 
+    // Deterministic HSL Avatar styling
+    getUserAvatarStyle(userId) {
+      if (!userId) return "background-color: #64748b; color: white;";
+      let hash = 0;
+      for (let i = 0; i < userId.length; i++) {
+        hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const h = Math.abs(hash % 360);
+      const s = 60; 
+      const l = 40; 
+      return `background-color: hsl(${h}, ${s}%, ${l}%); color: white; border: 1px solid rgba(255,255,255,0.1);`;
+    },
+
+    getUserInitials(userId) {
+      if (!userId) return "?";
+      // Take first two chars of signing public key address
+      return userId.substring(2, 4).toUpperCase();
+    },
+
+    getUserDisplayName(userId) {
+      if (userId === this.identity) return "You";
+      const shell = this.getShell();
+      if (shell) {
+        const contact = shell.contacts.find(c => c.id === userId);
+        if (contact) return contact.name;
+      }
+      return "Operator " + userId.substring(0, 8);
+    },
+
+    // Format rich text bodies with basic markdown parser
+    formatMessageBody(text) {
+      if (!text) return "";
+      let html = text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      // Code blocks ```code```
+      html = html.replace(/```([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>');
+      // Inline code `code`
+      html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+      // Bold **bold**
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      // Italic *italic*
+      html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      
+      // Auto-link URLs
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      html = html.replace(urlRegex, (url) => {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-link">${url}</a>`;
+      });
+      
+      return html;
+    },
+
+    // Combined timeline getter: messages + system action logs sorted deterministically by clock
+    getCombinedTimeline() {
+      const messages = this.view.messages || [];
+      const systemItems = this.getSystemEvents();
+      
+      const messageById = new Map();
+      for (const m of messages) {
+        messageById.set(m.id, m);
+      }
+
+      const timeline = [];
+      for (const m of messages) {
+        let parentMsg = null;
+        if (m.parentId) {
+          parentMsg = messageById.get(m.parentId) || null;
+        }
+        timeline.push({
+          ...m,
+          isSystem: false,
+          parentMsg: parentMsg
+        });
+      }
+      
+      for (const s of systemItems) {
+        if (!timeline.some(t => t.id === s.id)) {
+          timeline.push(s);
+        }
+      }
+      
+      return timeline.sort((a, b) => {
+        if (a.clock !== b.clock) return a.clock - b.clock;
+        return a.id.localeCompare(b.id);
+      });
+    },
+
+    getfilteredTimeline() {
+      // Deprecated helper check to back filteredTimeline getter
+      return this.filteredTimeline;
+    },
+
+    get filteredTimeline() {
+      const timeline = this.getCombinedTimeline();
+      if (!this.searchQuery) return timeline;
+      const q = this.searchQuery.toLowerCase();
+      return timeline.filter(item => {
+        if (item.isSystem) {
+          return item.text.toLowerCase().includes(q);
+        }
+        return item.body.toLowerCase().includes(q) || 
+               item.author.toLowerCase().includes(q) ||
+               this.getUserDisplayName(item.author).toLowerCase().includes(q);
+      });
+    },
+
+    getSystemEvents() {
+      const col = this.getCollection();
+      if (!col) return [];
+      
+      const systemItems = [];
+      for (const ev of col.events.values()) {
+        const kind = ev.header.kind;
+        const author = ev.header.author;
+        const clock = ev.header.clock;
+        const timestamp = (ev.body.payload?.published ? new Date(ev.body.payload.published).getTime() : null) || ev.body.payload?.timestamp || ev.header.clock * 1000 + 1771180000000;
+        
+        if (kind === "genesis") {
+          systemItems.push({
+            id: ev.id,
+            clock,
+            isSystem: true,
+            type: "genesis",
+            author,
+            timestamp,
+            text: `Channel was initialized by Operator ${author.substring(0, 8)}...`
+          });
+        } else if (kind === "membership") {
+          const payload = ev.body.cleartext || ev.decodedPayload || {};
+          const target = payload.target || "unknown";
+          const action = payload.action || "grant";
+          systemItems.push({
+            id: ev.id,
+            clock,
+            isSystem: true,
+            type: "membership",
+            author,
+            timestamp,
+            text: `Operator ${author.substring(0, 8)}... granted ${action === "grant" ? "Read/Write" : "Revoke"} capabilities to Operator ${target.substring(0, 8)}...`
+          });
+        } else if (kind === "epoch") {
+          systemItems.push({
+            id: ev.id,
+            clock,
+            isSystem: true,
+            type: "epoch",
+            author,
+            timestamp,
+            text: `Confidentiality rotating wrapped key epoch initialized by ${author.substring(0, 8)}...`
+          });
+        }
+      }
+      return systemItems;
+    },
+
+    // Roster management combining workspace membership & capabilities
+    getChannelMembers() {
+      const col = this.getCollection();
+      const shell = this.getShell();
+      const members = [];
+      
+      if (shell && shell.activeWorkspace) {
+        for (const mId of shell.activeWorkspace.members) {
+          const caps = col ? col.capabilities.get(mId) : null;
+          members.push({
+            id: mId,
+            name: shell.contacts.find(c => c.id === mId)?.name || "Operator " + mId.substring(0, 6),
+            capabilities: caps || (mId === shell.participant.id ? ["read", "write"] : ["read"])
+          });
+        }
+      } else if (col) {
+        for (const [mId, caps] of col.capabilities.entries()) {
+          members.push({
+            id: mId,
+            name: "Operator " + mId.substring(0, 6),
+            capabilities: caps
+          });
+        }
+      }
+      return members;
+    },
+
+    inspectDid(userId) {
+      const didDocument = {
+        "@context": [
+          "https://www.w3.org/ns/did/v1",
+          "https://w3id.org/security/suites/jws-2020/v1"
+        ],
+        "id": `did:key:${userId}`,
+        "verificationMethod": [
+          {
+            "id": `did:key:${userId}#key-1`,
+            "type": "JsonWebKey2020",
+            "controller": `did:key:${userId}`,
+            "publicKeyJwk": {
+              "kty": "EC",
+              "crv": "P-256",
+              "x": userId.substring(2, 66),
+              "y": userId.substring(66, 130)
+            }
+          }
+        ],
+        "authentication": [
+          `did:key:${userId}#key-1`
+        ],
+        "assertionMethod": [
+          `did:key:${userId}#key-1`
+        ]
+      };
+      prompt(`W3C DID Core Document for key did:key:${userId.substring(0, 8)}...`, JSON.stringify(didDocument, null, 2));
+    },
+
+    // Replying and scroll tools
+    setReply(msg) {
+      this.replyingTo = msg;
+      this.$nextTick(() => {
+        const inputEl = this.$el.querySelector(".chat-input");
+        if (inputEl) inputEl.focus();
+      });
+    },
+
+    scrollToMessage(msgId) {
+      const el = this.$el.querySelector(`#msg-${msgId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("highlight-flash");
+        setTimeout(() => {
+          el.classList.remove("highlight-flash");
+        }, 1500);
+      }
+    },
+
+    scrollToBottom() {
+      const scroller = this.$el.querySelector("#chat-scroller");
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    },
+
+    // Attachments
+    applyAttachment() {
+      if (this.attachmentUrlInput) {
+        this.attachedImageUrl = this.attachmentUrlInput.trim();
+        this.attachmentUrlInput = "";
+        this.showAttachmentInput = false;
+      }
+    },
+
     async send() {
-      if (!this.text) return;
+      if (!this.text && !this.attachedImageUrl) return;
       const col = this.getCollection();
       if (!col) return;
 
@@ -135,35 +569,58 @@
         if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
       }
 
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Create",
+        "object": {
+          "type": "Note",
+          "content": this.text,
+          "published": new Date().toISOString()
+        }
+      };
+
+      if (this.replyingTo) {
+        payload.object.inReplyTo = this.replyingTo.id;
+        payload.parentId = this.replyingTo.id; // fallback
+      }
+
+      if (this.attachedImageUrl) {
+        payload.object.attachment = {
+          "type": "Image",
+          "url": this.attachedImageUrl
+        };
+        payload.attachment = payload.object.attachment; // fallback
+      }
+
+      // Runtime W3C Standards Conformance Check
+      try {
+        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
+        StandardsValidator.validateActivityStreams(payload, "Create");
+      } catch (err) {
+        console.error("Standards Conformance Error:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
+
       const ev = await Event.create({
         kind: "message",
         author: p.id,
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
-        payload: {
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "type": "Create",
-          "object": {
-            "type": "Note",
-            "content": this.text,
-            "published": new Date().toISOString()
-          },
-          // Backward compatibility fallbacks
-          "body": this.text,
-          "timestamp": Date.now()
-        }
+        payload
       }, p);
 
       const added = await col.addEvent(ev);
       if (added) {
         this.saveEventOnShell(shell, ev);
         this.text = "";
+        this.replyingTo = null;
+        this.attachedImageUrl = "";
+        
         await this.refresh();
-
         this.$nextTick(() => {
-          const scroller = this.$el.querySelector("#chat-scroller");
-          if (scroller) scroller.scrollTop = scroller.scrollHeight;
+          this.scrollToBottom();
         });
       }
     },
@@ -201,12 +658,18 @@
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Like",
           "object": msg.id,
-          "content": symbol,
-          // Backward compatibility fallbacks
-          "target": msg.id,
-          "symbol": symbol
+          "content": symbol
         }
       }, p);
+
+      // Runtime W3C Standards Conformance Check
+      try {
+        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
+        StandardsValidator.validateActivityStreams(ev.body.payload || ev.body.cleartext, "Like");
+      } catch (err) {
+        console.error("Standards Conformance Error on Reaction event:", err.message);
+        return;
+      }
 
       const added = await col.addEvent(ev);
       if (added) {
@@ -249,12 +712,18 @@
             "type": "Note",
             "id": this.editing.id,
             "content": this.editText
-          },
-          // Backward compatibility fallbacks
-          "target": this.editing.id,
-          "body": this.editText
+          }
         }
       }, p);
+
+      // Runtime W3C Standards Conformance Check
+      try {
+        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
+        StandardsValidator.validateActivityStreams(ev.body.payload || ev.body.cleartext, "Update");
+      } catch (err) {
+        console.error("Standards Conformance Error on Edit event:", err.message);
+        return;
+      }
 
       const added = await col.addEvent(ev);
       if (added) {
@@ -272,7 +741,6 @@
       if (!shell) return;
       const p = shell.participant;
 
-      // 1. Resolve invitee using contact pool if available
       const savedContacts = JSON.parse(localStorage.getItem("holoapps_contacts") || "[]");
       let targetId = "";
       let targetCurveId = "";
@@ -301,7 +769,6 @@
         if (!targetCurveId) return;
       }
 
-      // 2. Author a membership grant event
       const parents = Array.from(col.heads);
       let maxClock = 0;
       for (const pId of parents) {
@@ -330,7 +797,6 @@
       }
       this.saveEventOnShell(shell, grantEvent);
 
-      // 3. Generate and wrap a new/existing epoch key
       let epochKey = col.epochKeys.get(col.currentEpochId);
       if (!epochKey) {
         epochKey = await HoloAppsCrypto.generateEpochKey();
@@ -370,7 +836,6 @@
       col.epochKeys.set(epochEvent.id, epochKey);
       col.currentEpochId = epochEvent.id;
 
-      // 4. Serialize invite payload
       const allEvents = Array.from(col.events.values()).map(ev => ({
         header: ev.header,
         body: ev.body,
@@ -396,145 +861,882 @@
 </script>
 
 <style>
+  /* Premium Dark Chat UI Styles */
   .msg-wrapper {
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
-    background: #1e293b;
+    background: rgba(10, 15, 26, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Header Bar Styles */
+  .chat-header {
+    height: 64px;
+    padding: 0 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.3);
+    flex-shrink: 0;
+  }
+  .channel-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hash-tag {
+    font-size: 1.4rem;
+    color: #6366f1;
+    font-weight: 700;
+  }
+  .channel-meta {
+    display: flex;
+    flex-direction: column;
+  }
+  .channel-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin: 0;
+  }
+  .channel-topic {
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+  .channel-topic-id {
+    font-family: 'Source Code Pro', monospace;
+    color: #38bdf8;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  /* Search Input styles */
+  .search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-input {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 6px 12px 6px 30px;
+    font-size: 0.8rem;
+    color: white;
+    width: 180px;
+    transition: all 0.2s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 10px center;
+  }
+  .search-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    width: 240px;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+  }
+  .clear-search-btn {
+    position: absolute;
+    right: 10px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .clear-search-btn:hover {
+    color: white;
+  }
+
+  /* Member Toggle Button */
+  .toggle-members-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    border: 1px solid rgba(148, 163, 184, 0.1);
-    padding: 16px;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .toggle-members-btn:hover, .toggle-members-btn.active {
+    color: white;
+    background: rgba(99, 102, 241, 0.15);
+    border-color: #6366f1;
+  }
+  .member-count-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #6366f1;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Main Workspace Split layout */
+  .chat-main-area {
+    display: flex;
+    flex-grow: 1;
     overflow: hidden;
     position: relative;
   }
+  .timeline-pane {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 16px;
+    position: relative;
+  }
+
+  /* Message List layout */
   .messages-list {
     flex-grow: 1;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding-right: 4px;
   }
-  .message {
-    padding: 10px 14px;
-    background: rgba(15, 23, 42, 0.5);
-    border: 1px solid rgba(148, 163, 184, 0.1);
-    border-radius: 8px;
-    max-width: 80%;
-    align-self: flex-start;
+
+  /* System action log row */
+  .system-log-row {
+    display: flex;
+    justify-content: center;
+    margin: 4px 0;
+  }
+  .system-log-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    max-width: 85%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .system-log-icon {
+    font-size: 0.95rem;
+  }
+  .system-log-content {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .system-log-time {
+    font-size: 0.65rem;
+    color: #475569;
+    font-family: 'Source Code Pro', monospace;
+  }
+
+  /* Empty state */
+  .empty-state-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+    gap: 12px;
+    color: #64748b;
+    text-align: center;
+    padding: 40px;
+  }
+  .empty-state-icon {
+    font-size: 3rem;
+    opacity: 0.3;
+  }
+  .empty-state-container h4 {
+    color: #f8fafc;
+    margin: 0;
+  }
+  .empty-state-container p {
+    font-size: 0.85rem;
+    max-width: 240px;
+    line-height: 1.4;
+  }
+
+  /* Chat Message Row */
+  .message-row {
+    display: flex;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    transition: background-color 0.15s;
     position: relative;
   }
-  .message.mine {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: rgba(99, 102, 241, 0.3);
-    align-self: flex-end;
+  .message-row:hover {
+    background: rgba(255, 255, 255, 0.02);
   }
-  .meta {
-    font-size: 0.75rem;
-    color: #64748b;
-    margin-bottom: 4px;
+  .message-row.mine {
+    background: rgba(99, 102, 241, 0.03);
+  }
+  .message-row.mine:hover {
+    background: rgba(99, 102, 241, 0.05);
+  }
+
+  /* User circular avatars */
+  .user-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
     display: flex;
-    gap: 8px;
-  }
-  .author {
+    align-items: center;
+    justify-content: center;
     font-weight: 700;
-    color: #818cf8;
+    font-size: 0.82rem;
+    flex-shrink: 0;
+    user-select: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   }
-  .message.mine .author {
+
+  .message-content {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    min-width: 0;
+  }
+  .message-meta-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .message-author-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #f8fafc;
+  }
+  .message-author-badge {
+    font-size: 0.65rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+  .message-row.mine .message-author-badge {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.25);
     color: #a5b4fc;
   }
-  .edited {
-    font-style: italic;
+  .message-time {
+    font-size: 0.72rem;
     color: #475569;
   }
-  .body {
-    font-size: 0.9rem;
-    line-height: 1.4;
+  .message-edited-tag {
+    font-size: 0.7rem;
+    color: #475569;
+    font-style: italic;
+    cursor: help;
+  }
+
+  /* Message Body & formatting */
+  .message-body-text {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #cbd5e1;
     word-break: break-word;
   }
-  .actions {
+  .message-body-text strong {
+    color: white;
+    font-weight: 600;
+  }
+  .message-body-text em {
+    font-style: italic;
+    color: #e2e8f0;
+  }
+  .inline-code {
+    font-family: 'Source Code Pro', monospace;
+    background: rgba(0, 0, 0, 0.4);
+    color: #f43f5e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .code-block {
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'Source Code Pro', monospace;
+    font-size: 0.8rem;
+    color: #34d399;
+  }
+  .chat-link {
+    color: #6366f1;
+    text-decoration: none;
+    border-bottom: 1px dashed transparent;
+  }
+  .chat-link:hover {
+    border-bottom-color: #6366f1;
+  }
+
+  /* Reply references in timeline list */
+  .reply-reference-box {
     display: flex;
+    align-items: center;
     gap: 6px;
-    margin-top: 6px;
-    opacity: 0;
-    transition: opacity 150ms ease;
-  }
-  .message:hover .actions {
-    opacity: 1;
-  }
-  .actions button {
-    background: transparent;
-    border: none;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border-left: 2px solid #6366f1;
+    border-radius: 0 6px 6px 0;
+    margin-bottom: 6px;
+    font-size: 0.78rem;
     color: #64748b;
-    font-size: 0.75rem;
     cursor: pointer;
+    transition: all 0.2s;
+    width: fit-content;
+    max-width: 100%;
   }
-  .actions button:hover {
+  .reply-reference-box:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+  }
+  .reply-arrow {
+    color: #6366f1;
+    font-weight: 700;
+  }
+  .reply-author {
+    font-weight: 600;
+    color: #cbd5e1;
+  }
+  .reply-body-snippet {
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Embedded attachments preview */
+  .attachment-preview-card {
+    margin-top: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 400px;
+    max-height: 240px;
+    width: fit-content;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .embedded-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .embedded-image:hover {
+    opacity: 0.9;
+  }
+
+  /* Reactions badges */
+  .reactions-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .reaction-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+    position: relative;
+  }
+  .reaction-badge:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
     color: white;
   }
-  .reactions {
-    display: flex;
-    gap: 4px;
-    margin-top: 6px;
+  .reaction-badge.active {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: #6366f1;
+    color: #a5b4fc;
   }
-  .badge {
-    background: rgba(148, 163, 184, 0.1);
-    border: 1px solid rgba(148, 163, 184, 0.2);
+  .reaction-badge.active:hover {
+    background: rgba(99, 102, 241, 0.22);
+  }
+
+  /* Reactions authors tooltips */
+  .reaction-tooltip {
+    visibility: hidden;
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #0f172a;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #e2e8f0;
+    text-align: center;
+    border-radius: 6px;
+    padding: 4px 8px;
+    z-index: 100;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  .reaction-badge:hover .reaction-tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  /* Flash Highlight animation for quote scrolling */
+  @keyframes flash-highlight {
+    0% { background-color: rgba(99, 102, 241, 0.35); box-shadow: 0 0 12px rgba(99, 102, 241, 0.5); }
+    100% { background-color: transparent; box-shadow: none; }
+  }
+  .highlight-flash {
+    animation: flash-highlight 1.5s ease-out;
+  }
+
+  /* Hover Popover Toolbar */
+  .message-hover-toolbar {
+    position: absolute;
+    right: 12px;
+    top: -12px;
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
     padding: 2px 6px;
-    border-radius: 10px;
-    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    z-index: 10;
+    transition: opacity 0.12s, visibility 0.12s;
+  }
+  .message-row:hover .message-hover-toolbar {
+    opacity: 1;
+    visibility: visible;
+  }
+  .quick-reactions {
+    display: flex;
+    gap: 2px;
+  }
+  .toolbar-btn {
+    background: transparent;
+    border: none;
+    font-size: 0.88rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.1s;
+  }
+  .toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .toolbar-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 0 4px;
+  }
+  .toolbar-action-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.1s;
+  }
+  .toolbar-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+
+  /* Reply active indication banner */
+  .reply-active-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(99, 102, 241, 0.1);
+    border-left: 3px solid #6366f1;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .reply-banner-content {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+  }
+  .reply-label {
+    color: #a5b4fc;
+    white-space: nowrap;
+  }
+  .reply-snippet {
+    color: #94a3b8;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cancel-reply-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    font-weight: 700;
     cursor: pointer;
   }
-  .badge.active {
-    background: rgba(99, 102, 241, 0.2);
-    border-color: #6366f1;
+  .cancel-reply-btn:hover {
+    color: white;
   }
+
+  /* Attachment Banner row */
+  .attachment-active-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(16, 185, 129, 0.1);
+    border-left: 3px solid #10b981;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .attachment-banner-content {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+  }
+  .attachment-label {
+    color: #34d399;
+    white-space: nowrap;
+  }
+  .attachment-url-snippet {
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: monospace;
+  }
+  .cancel-attachment-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .cancel-attachment-btn:hover {
+    color: white;
+  }
+
+  /* Input Attachment url bar */
+  .input-actions-bar {
+    display: flex;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .attachment-url-input {
+    flex-grow: 1;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: white;
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    border-radius: 4px;
+  }
+  .attachment-url-input:focus {
+    outline: none;
+    border-color: #10b981;
+  }
+  .apply-attachment-btn {
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .apply-attachment-btn:hover {
+    background: #059669;
+  }
+  .cancel-attachment-input-btn {
+    background: #475569;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .cancel-attachment-input-btn:hover {
+    background: #334155;
+  }
+
+  /* Input Main Area style */
   .input-bar {
     display: flex;
     gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .action-trigger-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .action-trigger-btn:hover, .action-trigger-btn.active {
+    color: white;
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.2);
   }
   .chat-input {
-    background: #0f172a;
-    border: 1px solid rgba(148, 163, 184, 0.1);
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: white;
-    padding: 10px;
-    border-radius: 6px;
-    font-size: 0.85rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
     flex-grow: 1;
+    transition: border-color 0.2s;
   }
   .chat-input:focus {
     outline: none;
     border-color: #6366f1;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.25);
   }
   .send-btn {
     background: #6366f1;
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 0.85rem;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
     cursor: pointer;
+    transition: all 0.2s;
   }
+  .send-btn:hover:not(:disabled) {
+    background: #4f46e5;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+  }
+  .send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .invite-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .invite-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+  }
+
+  /* Right Side Members Sidebar */
+  .members-sidebar-pane {
+    width: 250px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.35);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-header-label {
+    height: 48px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #64748b;
+  }
+  .members-scroller {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .member-card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 10px;
+    gap: 8px;
+  }
+  .member-avatar-badge-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .member-details {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .member-name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .member-address {
+    font-size: 0.68rem;
+    color: #64748b;
+    font-family: 'Source Code Pro', monospace;
+  }
+  .member-caps-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .cap-badge {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .cap-badge.read {
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+  }
+  .cap-badge.write {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+  .inspect-did-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    font-size: 0.7rem;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .inspect-did-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  /* Edit dialog popups */
   .edit-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(15, 23, 42, 0.8);
+    background: rgba(5, 7, 12, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10;
+    z-index: 1000;
   }
   .edit-dialog {
-    background: #1e293b;
-    padding: 20px;
-    border-radius: 8px;
-    border: 1px solid rgba(148, 163, 184, 0.1);
-    max-width: 320px;
+    background: rgba(15, 23, 42, 0.95);
+    padding: 24px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    max-width: 400px;
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 16px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+  }
+  .edit-dialog h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: white;
+    margin: 0;
   }
   .edit-buttons {
     display: flex;
@@ -543,5 +1745,8 @@
   }
   .cancel {
     background: #475569;
+  }
+  .cancel:hover {
+    background: #334155;
   }
 </style>
