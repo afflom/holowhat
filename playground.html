@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Playground</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap"
+      rel="stylesheet"
+    />
+
+    <link href="assets/css/reset.css" rel="stylesheet" />
+    <link
+      rel="icon"
+      href="assets/img/favicon.svg"
+      sizes="any"
+      type="image/svg+xml"
+    />
+    <style>
+      *,
+      *::after,
+      *::before {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        background: #111;
+      }
+    </style>
+    <script>
+      window.ALPINE_VERSION = "3.15.0";
+      window.AUTOMERGE_ID = "2RsvqRvmUqCmxPhEbdXtwW4qsdFm";
+    </script>
+  </head>
+  <body x-data="playground">
+    <world-block></world-block>
+
+    <script src="assets/scripts/webfont.js"></script>
+    <script src="assets/scripts/regl-stars.js" type="module"></script>
+    <script src="assets/scripts/playground.js" type="module"></script>
+  </body>
+</html>

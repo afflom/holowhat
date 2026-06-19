@@ -23,7 +23,7 @@
   >
     <template x-for="world in worlds">
       <div
-        @click="location.href = './index.html?id=' + (world.slug || world.automerge_id)"
+        @click="location.href = './playground.html?id=' + (world.slug || world.automerge_id)"
         class="world"
       >
         <div class="pane">

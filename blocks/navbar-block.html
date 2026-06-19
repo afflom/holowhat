@@ -2,6 +2,9 @@
   <div class="square white" :class="{ active: spotlightOpen }" @click.stop="spotlightOpen = !spotlightOpen">
     <img src="assets/img/favicon.svg">
   </div>
+  <div class="square" style="margin-left: 8px;" @click="window.location.href = 'index.html'" title="Holo-Apps Dashboard">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+  </div>
 
   <div id="spotlight" x-show="spotlightOpen" class="spotlight" @click.outside="if ($event.target.tagName !== 'NAVBAR-BLOCK') {
     spotlightOpen = false
