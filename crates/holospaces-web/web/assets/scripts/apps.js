@@ -5,7 +5,11 @@ import init, { Console, WebRtcLink } from "../../../pkg/holospaces_web.js";
 
 // Initialize globals for custom SFC blocks (e.g. messenger-block)
 window.Alpine = Alpine;
-window.handle = null;
+window.handle = {
+  doc: () => ({ world: [] }),
+  change: () => {},
+  on: () => {}
+};
 
 // Initialize Substrate WebAssembly
 await init();
