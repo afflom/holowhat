@@ -1,0 +1,138 @@
+<div
+  @wheel.document.throttle.20ms="drawMinimap"
+  @touchmove.document.throttle.20ms="drawMinimap"
+  class="minimap"
+>
+  <canvas
+    class="minimap-canvas"
+    :class="{ lotr: doc.theme === 'lotr' }"
+    width="100"
+    height="100"
+  ></canvas>
+  <flex-block
+    :style="{
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '0 0 0 4px',
+  }"
+  >
+    <button @click="$world.scale += 0.1; drawMinimap()">+</button>
+    <button @click="$world.scale -= 0.1; drawMinimap()">-</button>
+    <button @click="$world.scale = 1; drawMinimap()">=</button>
+  </flex-block>
+</div>
+
+<script type="module">
+  export default {
+    mixins: ["@playground/block-mixin"],
+    init() {
+      this.drawMinimap()
+
+      const canvas = this.$host?.shadowRoot?.querySelector(".minimap-canvas")
+      if (canvas) {
+        canvas.addEventListener("click", (e) => {
+          const rect = canvas.getBoundingClientRect()
+          const x = e.clientX - rect.left
+          const y = e.clientY - rect.top
+          const worldWidth = 4096
+          const worldHeight = 4096
+          const scaleX = canvas.width / worldWidth
+          const scaleY = canvas.height / worldHeight
+          const viewportWidth = window.innerWidth
+          const viewportHeight = window.innerHeight
+          let newScrollX = Math.round(x / scaleX - viewportWidth / 2)
+          let newScrollY = Math.round(y / scaleY - viewportHeight / 2)
+          newScrollX = Math.max(
+            0,
+            Math.min(newScrollX, worldWidth - viewportWidth),
+          )
+          newScrollY = Math.max(
+            0,
+            Math.min(newScrollY, worldHeight - viewportHeight),
+          )
+          const world = document.querySelector("world-block")
+          if (world) {
+            this.$world.scrollX = newScrollX
+            this.$world.scrollY = newScrollY
+          }
+
+          this.drawMinimap()
+        })
+      }
+    },
+    drawMinimap() {
+      const canvas = this.$host?.shadowRoot?.querySelector(".minimap-canvas")
+      if (!canvas) return
+
+      const ctx = canvas.getContext("2d")
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      const worldWidth = 4096
+      const worldHeight = 4096
+      const viewportWidth = window.innerWidth / this.$world.scale
+      const viewportHeight = window.innerHeight / this.$world.scale
+      const scrollX = this.$world.scrollX ? Number(this.$world.scrollX) : 0
+      const scrollY = this.$world.scrollY ? Number(this.$world.scrollY) : 0
+
+      const scaleX = canvas.width / worldWidth
+      const scaleY = canvas.height / worldHeight
+
+      ctx.strokeStyle = "white"
+      ctx.lineWidth = 1
+      ctx.strokeRect(0, 0, canvas.width, canvas.height)
+
+      ctx.fillStyle = "#49c9b0"
+      ctx.fillRect(
+        scrollX * scaleX,
+        scrollY * scaleY,
+        viewportWidth * scaleX,
+        viewportHeight * scaleY,
+      )
+    },
+  }
+</script>
+
+<style>
+  .minimap {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 1001;
+    display: flex;
+    color: white;
+    font-size: 0.875rem;
+    overflow: hidden;
+    /* border: 0.5px solid var(--grey); */
+    backdrop-filter: blur(1px);
+  }
+  .minimap-canvas {
+    border-radius: 4px;
+    width: 100px;
+    height: 100px;
+    background: #36454f11;
+    margin-bottom: 2px;
+  }
+  .minimap-canvas.lotr {
+    background-image: url("/assets/img/lotr.webp");
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid var(--grey);
+    background: #111;
+    width: 24px;
+    height: 24px;
+    color: white;
+    font-size: 1.375rem;
+    line-height: 20px;
+    border-radius: 4px;
+  }
+
+  img {
+    filter: invert(1);
+  }
+</style>

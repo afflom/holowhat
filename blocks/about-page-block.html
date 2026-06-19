@@ -1,0 +1,166 @@
+<div>
+  <h1>Why a Dev Environment in the Browser?</h1>
+  <i>
+    This article was written without the assitance of AI, and
+    <a
+      target="_blank"
+      href="https://classes.matthewjbrown.net/teaching-files/philtech/berry-computer.pdf"
+      >proofread by Wife</a
+    >.
+  </i>
+  <p>
+    I hope the openness and accessibility of source code and data in one
+    environment inspires new ways of working that are more flow-based. A
+    Figma-like editor acting on live code. A button click from an app triggering
+    a debug window to a backend function. Right clicking the UI opening the
+    source code for a block. How can coding become more immediate and ultimately
+    more enjoyable?
+  </p>
+
+  <br />
+  <h2>What is Playground?</h2>
+  <p>
+    It's a website for creating collaborative worlds made up of web components
+    and JSON data.
+    <br /><br />
+    To publish blocks from a world, just include the <i>playground.js</i> script
+    on a web page and write block tags into the HTML. <br /><br />
+    You can even edit the blocks that make up the world canvas itself, to create
+    new tools for yourself and others. So far there is:
+  </p>
+  <ul>
+    <li>a canvas and minimap for navigating</li>
+    <li>a code editor for writing blocks</li>
+    <li>a rudimentary database editor</li>
+    <li>an API client</li>
+    <li>and settings for fonts and themes</li>
+  </ul>
+  <br />
+  <h2>What's next?</h2>
+  <p>
+    The goal is to create a general purpose programming environment for the web.
+    That means editing HTML, CSS and JavaScript as well as hosting files and
+    writing secure backend logic, even configuring infrastructure. Phew, that's
+    a mouthful.
+  </p>
+  <br />
+  <h2>Acknowledgements</h2>
+  <p>
+    There are some noteworthy influences to this project, the first being the
+    <a target="_blank" href="https://www.youtube.com/watch?v=gGw09RZjQf8"
+      >Lively Kernel</a
+    >
+    created by Dan Ingalls, and the Smalltalk programming language, of which
+    there are many flavors, but I think that
+    <a target="_blank" href="https://cuis.st/">Cuis Smalltalk</a> is the most
+    representitive because it gave me the "oh that's nice" feeling while
+    learning how to use it. I also credit
+    <a
+      target="_blank"
+      href="https://web.archive.org/web/20120702210615/http://www.yoyogames.com/gamemaker/windows"
+      >GameMaker 8.1</a
+    >, the first programming environment I ever worked in, and a wonderful
+    implementation of a gentle slope to skill attainment. To refresh my memory,
+    I created a simple pong game using the drag and drop blocks and found it to
+    be just as enjoyable today.
+
+    <br /><br />
+
+    In the early versions of Playground, I attempted to write a websocket layer
+    for collaborative programming. Those quite poor attempts are open-sourced on
+    the
+    <a target="_blank" href="https://github.com/PlaygroundNow/Playground"
+      >Playground 1.0</a
+    >
+    GitHub page. When a friend directed me to the
+    <a target="_blank" href="https://www.inkandswitch.com/">Ink & Switch</a> lab
+    and <a target="_blank" href="https://automerge.org">Automerge</a> library,
+    three remarkable things happened. First, I found a library that made
+    collaborative editing much easier. Second, I found a trove of
+    <a
+      target="_blank"
+      href="https://www.inkandswitch.com/essay/malleable-software/"
+      >essays</a
+    >
+    and
+    <a
+      target="_blank"
+      href="https://open.spotify.com/episode/5B8B6At0i7RWpiToYwFFas?si=abe0a9027dcd4cfa"
+      >talks</a
+    >
+    that helped me build a vocabulary for my somewhat vague feelings about
+    what's wrong with software development today and how it might be made
+    better. Third, I joined a Zoom call where Alan Kay and Dan Ingalls showed
+    up! I even got to have a 30-second conversation with Dan. He said I have it
+    a lot easier today because the web browser does so much more, and when he
+    created the Lively Kernel he had to write his own SVG renderer.
+
+    <br /><br />
+
+    Another challenge in early versions was the block framework. I tried to
+    write a frontend framework, which ended up working very poorly. Then I
+    discovered <a target="_blank" href="https://alpinejs.dev/">Alpine.js</a>,
+    and immediately felt that it would enable a clean looking syntax for the
+    blocks. It has the added benefit of working without a compilation, which is
+    important for editing in-browser. I don't know if blocks will always depend
+    on Alpine.js, but there wouldn't be a <i>usable</i>
+    version of Playground today without it.
+  </p>
+
+  <p>
+    Best,
+    <br /><br />
+    Ryan W.
+  </p>
+</div>
+
+<script type="module">
+  export default {
+    mixins: [],
+  }
+</script>
+
+<style>
+  div {
+    height: 640px;
+    width: 640px;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 24px;
+    overflow-y: scroll;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+  }
+
+  h2 {
+    font-size: 1.6rem;
+  }
+
+  h1,
+  h2 {
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  ul {
+    margin-top: 0;
+  }
+
+  b {
+    font-size: 1.35rem;
+  }
+
+  p,
+  li {
+    font-family: "Nunito";
+    font-size: 1.125rem;
+  }
+
+  @media (max-width: 720px) {
+    div {
+      width: 320px !important;
+    }
+  }
+</style>

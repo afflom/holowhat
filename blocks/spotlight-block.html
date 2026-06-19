@@ -1,0 +1,141 @@
+<div @click.stop="" @click.outside="spotlightOpen = false" class="wrapper">
+  <div class="search">
+    <img src="/assets/img/search.svg" /><input autofocus="" x-model="search" />
+  </div>
+  <div class="results" x-effect="filter(search)">
+    <template x-for="item in items">
+      <div
+        class="item"
+        x-text="item.name"
+        @click="openLibrary(item.name)"
+      ></div>
+    </template>
+  </div>
+</div>
+
+<script type="module">
+  export default {
+    mixins: ["@playground/block-mixin"],
+
+    search: "",
+    results: [],
+    items: [],
+    async init() {
+      this.$el.querySelector("input").focus()
+
+      this.results = await fetch("/blocks/@playground", {
+        headers: { accept: "application/json" },
+      }).then((resp) => resp.json())
+      this.items = this.results
+    },
+    filter() {
+      this.items = this.results.filter((i) =>
+        i.name.toLowerCase().includes(this.search.toLowerCase()),
+      )
+    },
+    openLibrary(location) {
+      const x = Number(this.props.x)
+      const y = Number(this.props.y)
+
+      this.world = document
+        .querySelector("world-block")
+        .shadowRoot.querySelector(".world")
+      this.space = document
+        .querySelector("world-block")
+        .shadowRoot.querySelector(".space")
+
+      const screenWidth = window.innerWidth / 2 - 500
+      const screenHeight = window.innerHeight / 2 - 200
+
+      const libraryHtml = `<library-block selected-package="@playground" ${
+        typeof location === "string"
+          ? `selected-file="${location + "-block"}"`
+          : ""
+      } x="${screenWidth + this.scrollX}" y="${
+        screenHeight + this.scrollY
+      }"></library-block>`
+
+      const world = document.querySelector("world-block")
+      if (world) {
+        world.insertAdjacentHTML("beforeend", libraryHtml)
+      }
+      this.spotlightOpen = false
+    },
+  }
+</script>
+
+<style>
+  :host {
+    z-index: 10000;
+    position: absolute;
+  }
+
+  .wrapper {
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    color: black;
+    border-radius: 8px;
+    background: #fefefefe;
+    box-shadow:
+      0 1px 1px hsl(0deg 0% 0% / 0.075),
+      0 2px 2px hsl(0deg 0% 0% / 0.075),
+      0 4px 4px hsl(0deg 0% 0% / 0.075),
+      0 8px 8px hsl(0deg 0% 0% / 0.075),
+      0 16px 16px hsl(0deg 0% 0% / 0.075);
+  }
+
+  @media (max-width: 600px) {
+    .wrapper {
+      width: 400px;
+    }
+  }
+
+  input {
+    width: 100%;
+    padding: 16px 64px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    outline: none;
+  }
+
+  .search {
+    position: relative;
+  }
+
+  .search > img {
+    display: block;
+    z-index: 1;
+    pointer-events: none;
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+  }
+
+  .results {
+    border-top: 1px solid #36454f22;
+    max-height: 600px;
+    overflow-y: auto;
+
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+  }
+
+  .item {
+    padding: 8px 24px;
+    font-size: 24px;
+    text-transform: capitalize;
+  }
+
+  .item:hover {
+    background: #eee;
+  }
+</style>

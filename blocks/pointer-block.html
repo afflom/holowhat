@@ -1,0 +1,87 @@
+<svg
+  :style="{
+    transform: `translateX(${$world.scrollX}px) translateY(${$world.scrollY * $world.scale}px)`,
+    width: 100 / $world.scale + 'vw',
+    height: 100 / $world.scale + 'vh',
+  }"
+  @mousemove="handleMouseMove"
+  @mouseup="handleMouseUp"
+>
+  <line
+    :x1="(props.x - $world.scrollX) / $world.scale"
+    :y1="(props.y - $world.scrollY) / $world.scale"
+    :x2="endX"
+    :y2="endY"
+    stroke="blue"
+    stroke-width="1.5"
+    stroke-linecap="round"
+  />
+
+  <circle :cx="endX" :cy="endY" r="2" fill="blue" />
+</svg>
+
+<script type="module">
+  export default {
+    endX: 0,
+    endY: 0,
+
+    init() {
+      this.endX = this.props.x - this.$world.scrollX // / this.$world.scale;
+      this.endY = this.props.y - this.$world.scrollY // / this.$world.scale;
+    },
+
+    handleMouseMove(e) {
+      this.endX = Math.round(e.clientX) // / this.$world.scale;
+      this.endY = Math.round(e.clientY) // / this.$world.scale;
+
+      const elements = document.elementsFromPoint(e.clientX, e.clientY)
+      const device = elements.find(
+        (e) => e.tagName === "DEVICE-BLOCK" && e.id !== this.props.source,
+      )
+      if (device) {
+        const root = device.shadowRoot.querySelector("div")
+        root.style.background = "rgba(0,0,255,0.5)"
+      }
+    },
+
+    handleMouseUp(e) {
+      const elements = document.elementsFromPoint(e.clientX, e.clientY)
+      const deviceBlock = elements.find(
+        (e) => e.tagName === "DEVICE-BLOCK" && e.id !== this.props.source,
+      )
+      if (deviceBlock) {
+        const root = deviceBlock.shadowRoot.querySelector("div")
+        root.style.background = "unset"
+
+        const docDevice = this.doc.devices.find(
+          (d) => d.id === deviceBlock.getAttribute("device-id"),
+        )
+        if (!docDevice) return
+
+        const source = document.getElementById(this.props.source)
+
+        for (let child of [...source.children]) {
+          docDevice.world.push({
+            id: child.id + new Date().getTime(),
+            tagName: child.tagName.toLowerCase(),
+            props: Object.fromEntries(
+              Array.from(child.attributes)
+                .filter((attr) => attr.name !== "id")
+                .map((attr) => [attr.name, attr.value]),
+            ),
+          })
+        }
+
+        const data = Alpine.$data(deviceBlock.shadowRoot.querySelector("div"))
+        data.sync()
+      }
+      this.$host.remove()
+    },
+  }
+</script>
+
+<style>
+  svg {
+    position: absolute;
+  }
+</style>

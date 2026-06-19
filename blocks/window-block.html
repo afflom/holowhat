@@ -1,0 +1,198 @@
+<div @mouseup.window="copying = false" class="window" part="window">
+  <div drag-handle="" class="window-nav" part="nav" title="Close">
+    <button class="close" @click="$dispatch('close')"></button>
+    <button
+      class="copy"
+      :class="copying && 'copying'"
+      @mousedown.stop="copy"
+    ></button>
+
+    <span x-text="props.navTitle"></span>
+    <div
+      :style="{ display: 'flex', alignItems: 'center', position: 'relative', zIndex: '9999' }"
+      @click.outside="sizeOpen = false"
+    >
+      <button class="size" @click.stop="sizeOpen = !sizeOpen">
+        <img src="/assets/img/size.svg" />
+      </button>
+      <div
+        x-show="sizeOpen"
+        x-transition=""
+        :style="{
+          display: 'flex',
+          flexDirection: 'column',
+          textAlign: 'right',
+          color: 'white',
+          position: 'absolute',
+          marginTop: '1px',
+          left: '32px',
+          top: '-8px'
+        }"
+      >
+        <template
+          x-for="size in ['Auto', 'Mobile', 'Landscape', 'Tablet', 'Desktop']"
+        >
+          <button
+            @click="updateSize(size)"
+            :style="{
+              cursor: 'pointer',
+              width: '120px',
+              padding: '4px 0',
+              background: '#222',
+              color: 'white',
+              borderRadius: '4px',
+              border: '1px solid rgba(255, 255, 255, 0.5)',
+            }"
+            x-text="size"
+          ></button>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="content"
+    part="content"
+    :style="{
+    width,
+    height,
+    overflow: props.size === 'Auto' ? 'auto' : 'scroll',
+  }"
+  >
+    <slot></slot>
+  </div>
+</div>
+
+<script type="module">
+  export default {
+    mixins: ["@playground/coordinates-mixin", "@playground/draggable-mixin"],
+    copying: false,
+    sizeOpen: false,
+    width: "auto",
+    height: "auto",
+
+    init() {
+      this.props.size && this.updateSize(this.props.size)
+    },
+
+    copy(e) {
+      const rect = e.currentTarget.getBoundingClientRect()
+
+      const centerX = rect.left + rect.width / 2
+      const centerY = rect.top + rect.height / 2
+
+      const x = Math.round(centerX + this.$world.scrollX)
+      const y = Math.round(centerY + this.$world.scrollY)
+
+      this.copying = true
+      this.$world.$host.insertAdjacentHTML(
+        "beforeend",
+        `<pointer-block source="${this.$id}" x="${x}" y="${y}" </pointer-block>`,
+      )
+    },
+
+    updateSize(size) {
+      switch (size) {
+        case "Auto":
+          this.width = "auto"
+          this.height = "auto"
+          break
+        case "Mobile":
+          this.width = "390px"
+          this.height = "844px"
+          break
+        case "Landscape":
+          this.width = "844px"
+          this.height = "390px"
+          break
+        case "Tablet":
+          this.width = "1024px"
+          this.height = "1366px"
+          break
+        case "Desktop":
+          this.width = "1280px"
+          this.height = "853px"
+          break
+      }
+
+      this.props.size = size
+    },
+  }
+</script>
+
+<style>
+  .window {
+    position: relative;
+    min-width: 390px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 1);
+    backdrop-filter: blur(1px);
+    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+  }
+
+  .window-nav {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 1.5rem;
+    height: 30px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  }
+
+  .close {
+    cursor: pointer;
+    background: var(--red);
+    width: 25px;
+    height: 25px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    align-self: flex-start;
+    border: 0.5px solid var(--grey);
+    border-radius: 50%;
+    transform: translate(-10px, -10px);
+  }
+
+  .close:hover {
+    background: #ff0000;
+  }
+
+  .copy {
+    cursor: pointer;
+    position: absolute;
+    background: var(--green);
+    width: 15px;
+    height: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: none;
+    align-self: flex-start;
+    border: 0.5px solid var(--grey);
+    border-radius: 50%;
+    top: 0;
+    right: 0;
+    transform: translate(8px, -8px);
+  }
+
+  .copy:hover {
+    background: #00ff00;
+  }
+
+  .copying {
+    background: blue;
+  }
+
+  .size {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    margin-right: 4px;
+  }
+</style>

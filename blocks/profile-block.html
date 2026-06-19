@@ -1,0 +1,101 @@
+<div>
+  <div>
+    <label>Name</label>
+    <input x-model="doc.name" />
+  </div>
+
+  <div>
+    <label>URL Path</label>
+    <div
+      style="position: relative; display: flex; align-items: center; gap: 8px"
+    >
+      <input disabled x-model="path" />
+      <span
+        :style="{
+        position: 'absolute',
+        right: '8px',
+        top: '50%',
+        transform: 'translateY(-50%)'
+      }"
+        x-text="matches ? '✅' : '❌'"
+        >✅</span
+      >
+    </div>
+  </div>
+
+  <button @click="updatePath">Update Path</button>
+</div>
+
+<script type="module">
+  import slugify from "https://esm.sh/@sindresorhus/slugify@2.2.1"
+
+  export default {
+    mixins: ["@playground/block-mixin"],
+
+    path: "",
+    matches: false,
+    world: null,
+
+    async init() {
+      this.path = slugify(this.doc.name, { separator: "-" })
+
+      const res = await fetch(`/api/worlds`, {
+        credentials: "include",
+        headers: { accept: "application/json" },
+      }).then((resp) => resp.json())
+
+      const world = res.find((w) => w.slug === this.path)
+
+      this.matches = !!world
+
+      this.$watch("doc.name", () => {
+        this.path = slugify(this.doc.name, { separator: "-" })
+        const world = res.find((w) => w.slug === this.path)
+        this.matches = !!world
+      })
+    },
+
+    async updatePath() {
+      if (!this.doc?.name) return
+
+      const path = slugify(this.doc.name, { separator: "-" })
+      this.path = path
+
+      await fetch("/api/worlds/" + window.AUTOMERGE_ID, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          slug: path,
+        }),
+      })
+
+      this.matches = true
+    },
+  }
+</script>
+
+<style>
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  label {
+    font-size: 1.5rem;
+  }
+
+  input {
+    font-size: 1.375rem;
+  }
+
+  button {
+    font-size: 1.125rem;
+    padding: 6px 10px;
+    align-self: flex-start;
+  }
+</style>

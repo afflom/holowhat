@@ -1,0 +1,14 @@
+<script type="module">
+  export default {
+    init() {
+      if (!this.props.x && !this.props.y) return
+
+      this.$el.style.position = "absolute"
+      this.$el.style.transform = `translate(${this.props.x}px, ${this.props.y}px)`
+
+      this.$watch("props.x", () => {
+        this.$el.style.transform = `translate(${this.props.x}px, ${this.props.y}px)`
+      })
+    },
+  }
+</script>

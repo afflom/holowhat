@@ -1,0 +1,45 @@
+<div @save="save">
+  <code-block :pkg-id="props.pkgId" :file="props.file"></code-block>
+</div>
+
+<script type="module">
+  import { decode } from "https://esm.sh/html-entities"
+
+  export default {
+    mixins: ["@playground/block-mixin"],
+    async save(event) {
+      const { source } = event.detail // e.g. "source-playground-my-widget-block"
+      const [, pkg, ...rest] = ("source-playground-" + source).split("-") // pkg="playground", rest=["my","widget","block"]
+      const tag = rest.join("-") // "my-widget-block"
+
+      if (!this.props.pkgId) return
+
+      const pgHandle = await repo.find(this.props.pkgId)
+
+      const html = pgHandle.doc()[source]
+      if (!html) throw new Error("Cannot save text, missing from handle")
+
+      document.querySelector(
+        `#${this.props.file.split("/")[0]}-${tag}`,
+      ).innerHTML = html
+
+      this.$broadcast("updated-file", {
+        pkgId: this.props.pkgId,
+        pkg: this.props.file.split("/")[0],
+        tag,
+      })
+
+      if (source.endsWith("mixin")) {
+        customElements
+          .get("world-block")
+          .reloadAllBlocks(document, `@${pkg}/${source}`)
+        return
+      }
+
+      if (!source.endsWith("block") && !source.endsWith("cell")) return
+
+      const wc = customElements.get(tag)
+      if (wc) wc.reloadAllBlocks()
+    },
+  }
+</script>

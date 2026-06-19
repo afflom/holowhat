@@ -1,0 +1,214 @@
+<flex-block
+  :style="{
+  flexDirection: 'column'
+}"
+>
+  <div class="url">
+    <select x-model="block.method">
+      <option>GET</option>
+      <option>POST</option>
+      <option>PUT</option>
+      <option>DELETE</option>
+      <option>PATCH</option>
+      <option>OPTIONS</option>
+      <option>HEAD</option>
+      <option>TRACE</option>
+      <option>CONNECT</option>
+    </select>
+    <code contenteditable="true" x-ref="endpoint" @input="endpointInput"></code>
+  </div>
+  <div>
+    <template x-for="item in block.headers">
+      <div>
+        <input x-model="item.header" />
+        <input x-model="item.value" />
+        <button @click="removeHeader(item)">remove</button>
+      </div>
+    </template>
+    <button @click="addHeader">add header</button>
+  </div>
+  <label>Body</label>
+  <textarea class="body" x-model="block.body"></textarea>
+  <button class="play-button" @click="makeRequest">
+    <img src="/assets/icons/play-button.svg" />
+  </button>
+  <div class="response-container" x-show="block.response_status">
+    <div>Status Code: <span x-text="block.response_status"></span></div>
+    <textarea class="response" x-text="block.response_body"></textarea>
+
+    <div class="scripter">
+      <br />
+      <h2>Copy data from response to doc.</h2>
+      <label>Response Key</label>
+      <input x-model="block.from" />
+      <label>Doc Key</label>
+      <input x-model="block.to" />
+      <button @click="copy">Copy</button>
+    </div>
+  </div>
+</flex-block>
+
+<script type="module">
+  import get from "https://esm.sh/lodash.get"
+
+  export default {
+    mixins: ["@playground/doc-mixin"],
+    init() {
+      if (!this.block.url) {
+        this.$refs.endpoint.textContent = "https://api.google.com"
+        this.block.url = "https://api.google.com"
+      } else {
+        this.$refs.endpoint.textContent = this.block.url
+      }
+
+      if (!this.block.headers) {
+        this.block.headers = []
+      }
+
+      if (!this.block.method) {
+        this.block.method = "GET"
+      }
+
+      if (!this.block.from) this.block.from = ""
+      if (!this.block.to) this.block.to = ""
+    },
+    endpointInput(e) {
+      const value = e.target.textContent
+      this.block.url = value
+    },
+    addHeader() {
+      this.block.headers.push({
+        header: "",
+        value: "",
+      })
+    },
+    removeHeader(item) {
+      this.block.headers = this.block.headers.filter((h) => h !== item)
+    },
+    makeRequest() {
+      fetch(this.block.url, {
+        method: this.block.method.toUpperCase(),
+        body: this.block.body ? this.block.body : undefined,
+        headers: Object.fromEntries(
+          this.block.headers.map((h) => [
+            h.header,
+            (() => {
+              const isNum = h.value.match(/^\d+$/)
+              return isNum ? Number(h.value) : h.value
+            })(),
+          ]),
+        ),
+      })
+        .then((resp) => {
+          this.block.response_status = resp.status
+          return resp.text()
+        })
+        .then((text) => {
+          try {
+            const parsed = JSON.parse(text)
+            const formatted = JSON.stringify(parsed, null, 2)
+            this.block.response_body = formatted
+          } catch (e) {
+            console.log(e)
+            this.block.response_body = text
+          }
+        })
+        .catch((error) => (this.block.error = error.message))
+    },
+    copy() {
+      let parsed = null
+      try {
+        parsed = JSON.parse(this.block.response_body)
+      } catch (e) {
+        alert("Failed to parse response body as JSON!")
+        return
+      }
+
+      if (!parsed) {
+        alert("Failed to parse response body as JSON!")
+        return
+      }
+
+      const contextVar = this.doc.tables
+        .find((t) => t.name === "context")
+        .rows.find((r) => r.name === this.block.to)
+
+      if (!contextVar) {
+        this.doc.tables
+          .find((t) => t.name === "context")
+          .rows.push({
+            name: this.block.to,
+            value: get(parsed, this.block.from),
+          })
+        return
+      }
+
+      contextVar.value = JSON.stringify(get(parsed, this.block.from))
+    },
+  }
+</script>
+
+<style>
+  h2 {
+    margin: 0;
+  }
+  .url {
+    border-radius: 4px;
+    background: #1e1e1e;
+    max-width: 600px;
+    padding: 0 4px;
+  }
+
+  select {
+    width: max-content;
+  }
+
+  code {
+    font-size: 1.1rem;
+
+    color: #6aabcf;
+    padding: 4px;
+  }
+
+  input,
+  textarea {
+    font-family: monospace;
+  }
+
+  textarea.body {
+    field-sizing: content;
+  }
+
+  label {
+    font-size: 1.5rem;
+    margin-top: 20px;
+  }
+
+  .play-button {
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    background: var(--green);
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .play-button img {
+    filter: invert(2);
+    width: 24px;
+    height: 24px;
+  }
+
+  .response-container {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .response-container textarea {
+    word-break: break-all;
+    width: 100%;
+  }
+</style>

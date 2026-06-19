@@ -1,0 +1,43 @@
+<template x-if="menuOpen">
+  <template x-teleport="body">
+    <menu-block
+      :data-block="tag"
+      :x="menuX"
+      :y="menuY"
+      @click.window="if (!$event.target.closest('menu-block')) menuOpen = false;"
+    >
+    </menu-block
+  ></template>
+</template>
+
+<script type="module">
+  export default {
+    package: "",
+    label: "",
+    tag: "",
+    menuOpen: false,
+    menuX: 0,
+    menuY: 0,
+    init() {
+      this.package = this.$host.pkg
+      this.tag = this.$host.tagName
+      this.label = this.$host.tagName
+        .toLowerCase()
+        .split("-")
+        .slice(0, -1)
+        .join(" ")
+
+      this.$host.addEventListener("click", (e) => {
+        if (!e.metaKey) return
+
+        e.stopPropagation()
+        e.preventDefault()
+
+        this.menuX = e.x
+        this.menuY = e.y
+
+        this.menuOpen = true
+      })
+    },
+  }
+</script>

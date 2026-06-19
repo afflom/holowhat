@@ -1,0 +1,72 @@
+<script type="module">
+  export default {
+    start: false,
+    init() {
+      if (!this.space) return console.error("Space element not found in world")
+
+      document.removeEventListener("paste", this.paste)
+      document.addEventListener("paste", this.paste.bind(this))
+
+      // Only make a stem cell when click starts and ends on space
+      this.space.removeEventListener("mousedown", this.mouseDown)
+      this.space.addEventListener("mousedown", this.mouseDown.bind(this))
+
+      this.space.removeEventListener("click", this.insert)
+      this.space.addEventListener("click", this.insert.bind(this))
+    },
+    mouseDown(e) {
+      const focusedOnCell = document.activeElement?.tagName.endsWith("-CELL")
+      const onSpace = e.target === this.space
+      if (!focusedOnCell && onSpace) this.start = true
+    },
+    insert(e) {
+      if (!this.start) return
+      this.start = false
+
+      // clicked on an element
+      if (e.target !== this.space) return
+      // clicked off another element
+      if (e.target !== this.space) return
+      // clicked off another element
+      if (document.activeElement?.tagName.endsWith("CELL")) return
+
+      const x = this.$world.scrollX + e.clientX - 20
+      const y = this.$world.scrollY + e.clientY - 20
+
+      const html = `<flex-cell x="${x}" y="${y}"></flex-cell>`
+      this.$host.insertAdjacentHTML("beforeend", html)
+
+      setTimeout(() => {
+        this.$host.lastChild.shadowRoot?.querySelector("[tabindex]")?.focus()
+      }, 50)
+    },
+    paste(e) {
+      const focusedEl = document.activeElement
+      // only run for cells
+      if (!focusedEl.tagName.endsWith("-CELL")) return
+
+      const data = (e.clipboardData || window.clipboardData).getData("text")
+      if (data.startsWith("<") && data.includes("-cell>")) {
+        const temp = document.createElement("template")
+        temp.innerHTML = data.trim()
+
+        const node = temp.content.firstChild
+        this.removeIds(node)
+        focusedEl.insertAdjacentElement("afterend", node)
+
+        // focus created block
+        setTimeout(() => {
+          node.shadowRoot?.querySelector("[tabindex]")?.focus()
+        }, 50)
+      }
+    },
+    removeIds(el) {
+      el.removeAttribute("id")
+      for (const child of el.children) {
+        this.removeIds(child)
+      }
+
+      return el
+    },
+  }
+</script>

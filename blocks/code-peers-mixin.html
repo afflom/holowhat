@@ -1,0 +1,194 @@
+<script type="module">
+  import {
+    EditorView,
+    Decoration,
+    WidgetType,
+  } from "https://esm.sh/@codemirror/view@6.38.6"
+  import {
+    StateField,
+    RangeSetBuilder,
+    StateEffect,
+  } from "https://esm.sh/@codemirror/state@6.5.2"
+
+  class CaretWidget extends WidgetType {
+    constructor(id) {
+      super()
+      this.id = id
+    }
+    eq(other) {
+      return other.id === this.id
+    } // stable → no re-render
+    toDOM() {
+      const wrap = document.createElement("span")
+      wrap.style.cssText =
+        "position:relative;display:inline-block;width:0;pointer-events:none;"
+      const caret = document.createElement("span")
+      caret.style.cssText =
+        "display:inline-block;width:0;border-left:2px solid #6495ED;height:1.2em;vertical-align:-0.2em;"
+      const label = document.createElement("span")
+      label.textContent = this.id
+      label.style.cssText =
+        "position:absolute;left:2px;bottom:1.1em;font-size:10px;padding:2px 4px;border-radius:3px;background:#1e90ff;color:#fff;opacity:.9;"
+      wrap.append(caret, label)
+      return wrap
+    }
+    ignoreEvent() {
+      return true
+    }
+    destroy() {
+      /* no-op */
+    }
+  }
+
+  class EndLabelWidget extends WidgetType {
+    constructor(id) {
+      super()
+      this.id = id
+    }
+    eq(o) {
+      return o.id === this.id
+    }
+    toDOM() {
+      const wrap = document.createElement("span")
+      wrap.style.cssText =
+        "position:relative;display:inline-block;width:0;overflow:visible;" +
+        "line-height:0;vertical-align:baseline;pointer-events:none;"
+      wrap.setAttribute("aria-hidden", "true")
+
+      const badge = document.createElement("span")
+      badge.textContent = this.id
+      badge.style.cssText =
+        "position:absolute;left:2px;bottom:1.1em;white-space:nowrap;" +
+        "font-size:10px;line-height:1;padding:2px 4px;border-radius:3px;" +
+        "background:#1e90ff;color:#fff;opacity:.9;box-shadow:0 1px 2px rgba(0,0,0,.2);" +
+        "pointer-events:none;"
+
+      wrap.appendChild(badge)
+      return wrap
+    }
+    ignoreEvent() {
+      return true
+    }
+  }
+
+  const setPeerSelection = StateEffect.define()
+
+  function peerSelectionsExtension() {
+    const field = StateField.define({
+      create() {
+        return { deco: Decoration.none, peers: new Map() }
+      },
+      update(value, tr) {
+        let peers = value.peers
+        let didMutate = false
+
+        for (const e of tr.effects) {
+          if (e.is(setPeerSelection)) {
+            if (!didMutate) {
+              peers = new Map(peers)
+              didMutate = true
+            }
+            peers.set(e.value.senderId, {
+              senderId: e.value.senderId,
+              ranges: e.value.ranges,
+            })
+          }
+        }
+
+        if (!didMutate && !tr.docChanged) return value
+
+        // 1️⃣ Build unsorted decorations in an array
+        const parts = []
+        for (const peer of peers.values()) {
+          const id = peer.senderId || "peer"
+          for (const r of peer.ranges) {
+            const from = Math.min(r.from, r.to)
+            const to = Math.max(r.from, r.to)
+            if (from === to) {
+              parts.push(
+                Decoration.widget({
+                  side: 1,
+                  widget: new CaretWidget(id),
+                }).range(to),
+              )
+            } else {
+              parts.push(
+                Decoration.mark({
+                  attributes: { style: "background-color:#6495ED40;" },
+                }).range(from, to),
+              )
+              parts.push(
+                Decoration.widget({
+                  side: 1,
+                  widget: new EndLabelWidget(id),
+                }).range(to),
+              )
+            }
+          }
+        }
+
+        // 2️⃣ Let CodeMirror handle sorting and validation
+        const deco = Decoration.set(parts, true)
+
+        return { deco, peers }
+      },
+      provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
+    })
+
+    return field
+  }
+
+  export default {
+    view: undefined,
+
+    applyPeerSelection(event) {
+      const { file, senderId, ranges } = event.detail
+      if (file !== this.props.file || !this.view) return
+
+      this.view.dispatch({
+        effects: setPeerSelection.of({ senderId, ranges }),
+      })
+    },
+
+    applyExtensions() {
+      if (!this.view) return
+
+      this.view.dispatch({
+        effects: StateEffect.appendConfig.of(peerSelectionsExtension()),
+      })
+      this.view.dispatch({
+        effects: StateEffect.appendConfig.of(
+          EditorView.updateListener.of((update) => {
+            if (update.selectionSet || update.docChanged) {
+              const ranges = update.state.selection.ranges.map((r) => ({
+                from: r.from,
+                to: r.to,
+              }))
+
+              this.$broadcast("code-selected", {
+                file: this.props.file,
+                ranges,
+              })
+            }
+          }),
+        ),
+      })
+    },
+
+    init() {
+      window.addEventListener("peer-code-selected", (e) => {
+        this.applyPeerSelection(e)
+      })
+
+      this.$nextTick(() => {
+        this.applyExtensions()
+      })
+
+      this.$watch("props.source", () => {
+        this.$nextTick(() => {
+          this.applyExtensions()
+        })
+      })
+    },
+  }
+</script>

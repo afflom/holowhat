@@ -1,0 +1,158 @@
+<div class="container">
+  <div class="logo-wrapper">
+    <img class="logo" src="/assets/img/favicon.svg" />
+  </div>
+  <h1>Playground</h1>
+  <h2>The collaborative web toolkit</h2>
+
+  <p class="left">
+    <b>Build and publish directly in the browser</b> - an infinitely editable
+    development environment, built with web components and designed to be
+    local-first (no account required).
+  </p>
+
+  <img src="/assets/img/glamour1.png" />
+
+  <p class="right">
+    <b>It's all about blocks </b>- these are the artifacts you create in
+    Playground. Each tool in the environment is a block, the code editor, api
+    client, local-first database, even the world canvas itself. Since blocks are
+    themselves web components, use them in your favorite frontend framework, or
+    directly in HTML.
+  </p>
+
+  <img src="/assets/img/glamour3.png" />
+
+  <p class="left">
+    <b>Own your tools </b>- influenced by the Smalltalk language, the source
+    code for Playground is modifiable at runtime. Develop your tools in the same
+    language that you create blocks: HTML, CSS and JavaScript. The world canvas
+    below is themed like middle-earth. What world would you create?
+  </p>
+
+  <img src="/assets/img/glamour2.webp" />
+</div>
+
+<script type="module">
+  export default {
+    mixins: [],
+    init() {
+      WebFont.load({
+        google: { families: ["Nunito"] },
+      })
+    },
+  }
+</script>
+
+<style>
+  .container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    padding: 0 24px;
+  }
+
+  .logo-wrapper {
+    border-radius: 4px;
+    width: 42px;
+    height: 42px;
+    background: white;
+    padding: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .logo-wrapper img {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+  }
+
+  h1 {
+    font-size: 4rem;
+    margin: 0;
+    margin-top: 12px;
+  }
+
+  h2 {
+    margin: 0;
+    margin-top: -24px;
+    margin-bottom: 0;
+    color: rgba(0, 0, 0, 0.7);
+    font-size: 2rem;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  p {
+    font-family: "Nunito";
+    background: white;
+    border-radius: 4px;
+    padding: 16px 24px;
+    font-size: 1.125rem;
+    margin: 0 0 24px 0;
+    max-width: 640px;
+    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+    line-height: 1.2;
+  }
+
+  b {
+    font-family: "Nanum Pen Script";
+    font-size: 1.5rem;
+    transform: translateY(2px);
+    display: inline-block;
+    margin-right: 0.3rem;
+  }
+
+  p.left {
+    transform: translate(-100px, 50px);
+  }
+
+  p.right {
+    transform: translate(100px, 50px);
+  }
+
+  img {
+    max-width: 1024px;
+    border-radius: 4px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 1024px) {
+    p.left {
+      transform: unset;
+    }
+
+    p.right {
+      transform: unset;
+    }
+
+    img {
+      width: 100%;
+    }
+
+    h2 {
+      margin-bottom: 24px;
+    }
+  }
+
+  .nav-login-button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    color: white;
+    background: #7289da;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 1.2rem;
+    letter-spacing: 0.05rem;
+  }
+
+  .nav-login-button:hover {
+    opacity: 0.8;
+  }
+</style>

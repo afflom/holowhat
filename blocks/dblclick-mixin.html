@@ -1,0 +1,11 @@
+<script type="module">
+  export default {
+    init() {
+      return
+      this.$el.addEventListener("dblclick", (e) => {
+        e.stopPropagation()
+        this.openLibrary()
+      })
+    },
+  }
+</script>

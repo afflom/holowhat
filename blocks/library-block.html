@@ -1,0 +1,663 @@
+<div class="wrapper" x-effect="getPackageFiles">
+  <div class="section" x-show="!props.focusMode" x-transition="">
+    <template x-for="pkg in packages">
+      <div
+        @click="selectPackage(pkg.name)"
+        class="package"
+        :class="{ selected: props.selectedPackage === pkg.name }"
+        :style="{ display: 'flex', justifyContent: 'space-between' }"
+      >
+        <template x-if="!pkg.hasOwnProperty('newName')">
+          <div x-text="'@' + pkg.name"></div>
+        </template>
+        <template x-if="pkg.hasOwnProperty('newName')">
+          <div
+            :style="{ display: 'flex', flexDirection: 'column', padding: '0 8px' }"
+          >
+            <input
+              class="edit-name"
+              autofocus=""
+              x-model="pkg.newName"
+              x-effect="validatePackageName(pkg)"
+              @blur.stop.prevent="validatePackageName(pkg, true)"
+              @keydown.enter="validatePackageName(pkg, true)"
+            />
+            <div
+              :style="{ color: 'darkred', fontSize: '1rem', textTransform: 'none' }"
+              x-show="pkg.error"
+              x-html="pkg.error"
+            ></div>
+          </div>
+        </template>
+        <div
+          @click.stop
+          x-data="{ menuOpen: false }"
+          @click.outside="menuOpen = false"
+          :style="{ display: 'flex', alignItems: 'center', position: 'relative' }"
+        >
+          <img
+            :style="{ cursor: 'pointer', marginTop: 0, width: '16px', height: '16px' }"
+            @click.stop="menuOpen = !menuOpen"
+            src="/assets/icons/more-vertical-alt.svg"
+          />
+          <div
+            :style="{
+              zIndex: 9999,
+              position: 'absolute',
+              right: '-8px',
+              top: '100%',
+              background: 'white',
+              borderRadius: '4px',
+              padding: '4px 0',
+              boxShadow: 'rgba(0, 0, 0, 0.24) 0px 3px 8px'
+          }"
+            x-show="menuOpen"
+            x-transition
+          >
+            <button
+              @click="pkg.newName = pkg.name"
+              :style="{
+                padding: '4px 12px',
+                fontSize: '1rem',
+              }"
+            >
+              Rename
+            </button>
+            <button
+              @click="archivePackage(pkg)"
+              :style="{
+                padding: '4px 12px',
+                fontSize: '1rem',
+              }"
+            >
+              Archive
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+    <button @click="createPackage()">+</button>
+  </div>
+  <div class="section" x-show="!props.focusMode" x-transition="">
+    <div class="file-menu">
+      <div class="actions">
+        <button @click="createScript('block')" title="Create Block">
+          <img src="/assets/img/extension.svg" />
+        </button>
+        <button @click="createScript('mixin')" title="Create Mixin">
+          <img src="/assets/img/plug.svg" />
+        </button>
+        <button @click="createScript('app')" title="Create App">
+          <img src="/assets/img/bolt.svg" />
+        </button>
+      </div>
+      <input
+        class="filter"
+        :style="{ fontFamily: 'inherit' }"
+        id="filter"
+        placeholder="Filter..."
+        x-model="props.search"
+        x-effect="filter(props.search)"
+        autocomplete="off"
+      />
+    </div>
+    <div :style="{ overflowY: 'scroll', flex: '1' }">
+      <template x-for="file in filtered">
+        <div
+          class="package"
+          :data-selected="props.selectedFile === file.name + '-' + file.type"
+          :class="{ selected: props.selectedFile === file.name + '-' + file.type }"
+          @click="
+            if (!filtered.some(f => Object.hasOwn(f, 'newName'))) {
+              props.selectedFile = file.name + '-' + file.type
+              //props.focusMode = true
+            }
+          "
+        >
+          <div :style="{ display: 'flex', alignItems: 'center', gap: '8px' }">
+            <img
+              :style="{ marginTop: '0' }"
+              :src="file.type === 'block' || file.type === 'cell'
+                  ? '/assets/img/extension.svg'
+                  : file.type === 'mixin'
+                    ? '/assets/img/plug.svg'
+                    : '/assets/img/bolt.svg'"
+            />
+            <template x-if="!file.hasOwnProperty('newName')">
+              <span
+                x-show="!file.hasOwnProperty('newName')"
+                x-text="file.name"
+              ></span>
+            </template>
+            <template x-if="file.hasOwnProperty('newName')">
+              <div :style="{ display: 'flex', flexDirection: 'column' }">
+                <input
+                  class="edit-name"
+                  autofocus=""
+                  x-model="file.newName"
+                  x-effect="validateName(file)"
+                  @blur.stop.prevent="validateName(file, true)"
+                  @keydown.enter="validateName(file, true)"
+                />
+                <div
+                  :style="{ color: 'darkred', fontSize: '1rem', textTransform: 'none' }"
+                  x-show="file.error"
+                  x-html="file.error"
+                ></div>
+              </div>
+            </template>
+            <div
+              class="dirty"
+              x-show="dirty && props.selectedFile === file.name + '-' + file.type"
+            ></div>
+          </div>
+          <div :style="{ display: 'flex', alignItems: 'center' }">
+            <template x-if="file.type === 'app'">
+              <button
+                @click.stop="openApp(props.selectedPackage, file.name + '-' + file.type)"
+              >
+                <img :style="{ marginTop: 0 }" src="/assets/img/play.svg" />
+              </button>
+            </template>
+            <div
+              @click.stop
+              x-data="{ menuOpen: false }"
+              @click.outside="menuOpen = false"
+              :style="{ display: 'flex', alignItems: 'center', position: 'relative' }"
+            >
+              <img
+                :style="{ marginTop: 0 }"
+                @click.stop="menuOpen = !menuOpen"
+                src="/assets/icons/more-vertical-alt.svg"
+              />
+              <div
+                :style="{
+                  zIndex: 9999,
+                  position: 'absolute',
+                  right: '-8px',
+                  top: '100%',
+                  background: 'white',
+                  borderRadius: '4px',
+                  padding: '4px 0',
+                  boxShadow: 'rgba(0, 0, 0, 0.24) 0px 3px 8px'
+                }"
+                x-show="menuOpen"
+                x-transition
+              >
+                <button
+                  @click="file.newName = file.name"
+                  :style="{
+                      padding: '4px 12px',
+                      fontSize: '1rem',
+                    }"
+                >
+                  Rename
+                </button>
+                <button
+                  @click="archiveBlock(file)"
+                  :style="{
+                      padding: '4px 12px',
+                      fontSize: '1rem',
+                    }"
+                >
+                  Archive
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+  <div class="section">
+    <block-editor-block
+      :pkg-id="packages.find(p => props.selectedPackage === p.name)?.id"
+      :file="`${props.selectedPackage}/${props.selectedFile}`"
+    ></block-editor-block>
+  </div>
+  <div
+    @click="if (props.focusMode) { props.focusMode = '' } else { props.focusMode = true }"
+    :style="{
+    position: 'absolute',
+    cursor: 'pointer',
+    bottom: '8px',
+    left: '8px',
+    width: '32px',
+    height: '32px',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    background: 'white',
+    borderRadius: '4px'
+  }"
+  >
+    <img src="/assets/img/eye-alt.svg" />
+  </div>
+</div>
+
+<script type="module">
+  import AlpineBlock from "https://playground.now/assets/scripts/alpine-block.js"
+
+  function defineBlock(pkg, tagName, template) {
+    if (!customElements.get(tagName)) {
+      class AlpineBlockSFC extends AlpineBlock {}
+      AlpineBlockSFC.pkg = pkg
+      AlpineBlockSFC.tagName = tagName
+      AlpineBlockSFC.template = template
+      customElements.define(tagName, AlpineBlockSFC)
+    } else {
+      customElements.get(tagName).template = template
+    }
+  }
+
+  export default {
+    mixins: ["@playground/block-mixin"],
+    dirty: false,
+    focusMode: false,
+    filtered: [],
+    files: [],
+    packages: [],
+    async init() {
+      this.root = this.$el
+      this.props.search = ""
+
+      setTimeout(() => {
+        this.$el.querySelector("input#filter")?.focus()
+      }, 200)
+
+      this.packages = await Promise.all(
+        this.doc.packages.map(async (p) => {
+          const pkg = await repo.find(p)
+          return { name: pkg.doc().name, id: p }
+        }),
+      )
+
+      this.getPackageFiles()
+    },
+
+    selectPackage(name) {
+      this.props.search = ""
+      this.props.selectedFile = ""
+      this.props.selectedPackage = name
+
+      this.getPackageFiles()
+    },
+
+    async getPackageFiles() {
+      if (!this.packages?.length) return
+      if (!this.props.selectedPackage) {
+        this.props.selectedPackage = this.packages[0].name
+        return
+      }
+
+      const pkg = this.packages.find(
+        (p) => this.props.selectedPackage === p.name,
+      )
+      if (!pkg?.id) return
+
+      this.files = Object.keys((await repo.find(pkg.id)).doc())
+        .filter((name) => name.includes("-"))
+        .map((name) => ({
+          name: name.split("-").slice(0, -1).join("-"),
+          type: name.split("-").pop(),
+        }))
+      this.files.sort()
+
+      this.filtered = this.files
+
+      const file = this.files[0]
+      if (!this.props.selectedFile && file) {
+        this.props.selectedFile = file.name + "-" + file.type
+      }
+
+      this.$nextTick(() => {
+        const el = this.root.querySelector(
+          '.section:nth-child(2) .package[data-selected="true"]',
+        )
+        if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" })
+      })
+    },
+
+    async newFile(name, source) {
+      const template = document.createElement("template")
+      template.id = `${this.props.selectedPackage}-${name}`
+      template.innerHTML = source
+      document.body.appendChild(template)
+
+      debugger
+      if (name.endsWith("block") || name.endsWith("cell")) {
+        defineBlock(this.props.selectedPackage, name.toLowerCase(), template)
+      }
+
+      const pkg = this.packages.find(
+        (p) => this.props.selectedPackage === p.name,
+      )
+      if (!pkg?.id) return
+
+      const pgHandle = await repo.find(pkg.id)
+      pgHandle.change((doc) => (doc[name] = source))
+
+      this.props.selectedFile = name
+      await this.getPackageFiles()
+    },
+
+    async validatePackageName(pkg, save) {
+      if (pkg.newName === "") {
+        this.packages = this.packages.filter((p) => p !== pkg)
+      }
+
+      const name = pkg.newName?.trim()
+      const validFormat = /^[a-z0-9]+(-[a-z0-9]+)*$/i
+
+      if (!name || !validFormat.test(name)) {
+        pkg.error = "Use dashed lowercase, <br/>e.g. my-dashboard"
+        return
+      }
+
+      const exists = this.packages.some((p) => p !== pkg && p.name === name)
+
+      if (exists && name !== pkg.newName) {
+        pkg.error = "Name already exists"
+        return
+      }
+
+      pkg.error = null
+
+      if (save) {
+        if (pkg.error) return
+
+        if (pkg.name) {
+          if (name === pkg.name) {
+            delete pkg.newName
+            return
+          }
+          const pkgHandle = await repo.find(pkg.id)
+          pkgHandle.change((doc) => (doc.name = name))
+
+          pkg.name = name
+        } else {
+          const newPackage = await repo.create({
+            name,
+          })
+
+          pkg.name = name
+          pkg.id = newPackage.documentId
+          this.doc.packages.push(newPackage.documentId)
+        }
+
+        delete pkg.newName
+
+        this.packages = await Promise.all(
+          this.doc.packages.map(async (p) => {
+            const pkg = await repo.find(p)
+            return { name: pkg.doc().name, id: p }
+          }),
+        )
+
+        this.props.selectedPackage = pkg.name
+        await this.getPackageFiles()
+      }
+    },
+
+    async validateName(file, save) {
+      if (this.files[0]?.newName === "") {
+        this.files.shift()
+        this.filter(this.props.search)
+        return
+      }
+
+      const name = file.newName?.trim()
+      const validFormat = /^[a-z0-9]+(-[a-z0-9]+)*$/i
+
+      if (!name || !validFormat.test(name)) {
+        file.error = "Use dashed lowercase, <br/>e.g. my-dashboard"
+        return
+      }
+
+      const exists = this.files.some(
+        (f) =>
+          f !== file && file.name.split("-").slice(0, -1).join("-") === name,
+      )
+
+      if (exists && name !== file.newName) {
+        file.error = "Name already exists"
+        return
+      }
+
+      file.error = null
+
+      const type = file.type === "block" ? "cell" : file.type
+      if (save) {
+        if (file.error) return
+
+        if (file.name) {
+          // file exists
+          const pkg = this.packages.find(
+            (p) => this.props.selectedPackage === p.name,
+          )
+          if (!pkg?.id) return
+
+          const pgHandle = await repo.find(pkg.id)
+
+          debugger
+
+          await this.newFile(
+            `${name}-${type}`,
+            pgHandle.doc()[`${file.name}-${type}`],
+          )
+
+          pgHandle.change((doc) => {
+            delete doc[`${file.name}-${type}`]
+            delete doc[`${file.name}-${file.type}`]
+          })
+          file.name = name
+          delete file.newName
+        } else {
+          this.newFile(
+            name + "-" + type,
+            file.type === "block" || file.type === "mixin"
+              ? `<div>My new block</div>
+
+<script type="module">
+  export default {
+    mixins: []
+  }
+</${"script>"}
+  
+<style>
+</style>`
+              : `<window-block size="Mobile" x-on:close.stop="$el.remove()" nav-title="My App">
+  My new app!
+</window-block>`,
+          )
+        }
+
+        await this.getPackageFiles()
+      }
+    },
+
+    createPackage() {
+      if (this.packages.some((p) => Object.hasOwn(p, "newName"))) return
+
+      this.packages.push({
+        name: "",
+        newName: "",
+      })
+
+      this.$nextTick(() => {
+        this.$host.shadowRoot.querySelector(".edit-name")?.focus()
+      })
+    },
+
+    createScript(type = "block") {
+      if (this.files.some((f) => Object.hasOwn(f, "newName"))) return
+      this.props.search = ""
+      this.files.unshift({
+        type: type,
+        name: "",
+        newName: "",
+      })
+      this.$nextTick(() => {
+        this.$host.shadowRoot.querySelector(".edit-name")?.focus()
+      })
+    },
+
+    filter(search) {
+      this.filtered = this.files?.filter((f) =>
+        f.name.includes(search.toLowerCase()),
+      )
+    },
+
+    async archiveBlock(file) {
+      const pkg = this.packages.find(
+        (p) => this.props.selectedPackage === p.name,
+      )
+      if (!pkg?.id) return
+
+      const handle = await repo.find(pkg.id)
+
+      if (handle) {
+        handle.change((doc) => {
+          delete doc[`${file.name}-${file.type}`]
+        })
+      }
+
+      this.menuOpen = false
+      this.getPackageFiles()
+    },
+    archivePackage(pkg) {
+      this.doc.packages = this.doc.packages.filter((p) => p !== pkg.id)
+      this.packages = this.packages.filter((p) => p.id !== pkg.id)
+    },
+  }
+</script>
+
+<style>
+  .wrapper {
+    max-height: 600px;
+    font-size: 1.25rem;
+
+    display: flex;
+    align-items: stretch;
+  }
+
+  .section {
+    position: relative;
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .section:not(:last-child) {
+    border-right: 0.5px solid rgba(0, 0, 0, 0.2);
+  }
+
+  .selected {
+    background: #dfe2e2;
+  }
+
+  .section button {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-size: 1.2rem;
+  }
+
+  .package {
+    padding: 6px 12px;
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-transform: capitalize;
+  }
+
+  .package img {
+    width: 16px;
+    height: 16px;
+    margin-top: 6px;
+  }
+
+  .package:hover {
+    background: #eee;
+    color: black;
+  }
+
+  .package button {
+    font-family: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .package button:hover {
+    background: rgba(0, 0, 0, 0.1);
+  }
+
+  .file-menu {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 12px;
+    border-bottom: 0.5px solid var(--grey);
+  }
+
+  input {
+    border-radius: 4px;
+    border: 0.5px solid rgba(0, 0, 0, 0.2);
+  }
+
+  .file-menu input {
+    font-size: 1.125rem;
+    padding: 4px 8px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  .actions button {
+    position: relative;
+    background: white;
+    border: 0.5px solid rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+
+  .actions img {
+    height: 16px;
+    width: 16px;
+  }
+
+  .actions .plus {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+
+    height: 10px;
+    width: 10px;
+    background: var(--green);
+    border-radius: 50%;
+    border: 0.5px solid var(--grey);
+    padding: 2px;
+  }
+
+  .edit-name {
+    font-size: 1.125rem;
+  }
+
+  .dirty {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: black;
+  }
+</style>

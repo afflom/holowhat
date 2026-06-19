@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18" fill="none">
+  <style>
+    /* scale around each block's center */
+    .b { transform-box: fill-box; transform-origin: center; animation: pulse 1.35s ease-in-out infinite; }
+    .b1 { animation-delay: 0.00s; }
+    .b2 { animation-delay: 0.08s; }
+    .b3 { animation-delay: 0.16s; }
+    .b4 { animation-delay: 0.24s; }
+    .b5 { animation-delay: 0.32s; }
+    .b6 { animation-delay: 0.40s; }
+    .b7 { animation-delay: 0.48s; }
+    .b8 { animation-delay: 0.56s; }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(0.8); }
+      50%      { transform: scale(1); }
+    }
+
+    /* respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      .b { animation: none; }
+    }
+  </style>
+
+  <g id="Logo">
+    <path class="b b1" d="M5.19528 0.712474L0.712402 1.10468L1.1046 5.58755L5.58748 5.19535L5.19528 0.712474Z" fill="#34BE5B"/>
+    <path class="b b2" d="M5.58761 6.50466L1.10474 6.11246L0.712535 10.5953L5.19541 10.9875L5.58761 6.50466Z" fill="#FFB400"/>
+    <path class="b b3" d="M5.10904 11.4426L0.642578 11.991L1.19099 16.4574L5.65745 15.909L5.10904 11.4426Z" fill="#F15156"/>
+    <path class="b b4" d="M10.9875 2.90465L6.50464 2.51245L6.11244 6.99533L10.5953 7.38753L10.9875 2.90465Z" fill="#7289DA"/>
+    <path class="b b5" d="M10.512 7.95291L6.02295 8.26682L6.58798 16.3471L11.077 16.0332L10.512 7.95291Z" fill="#48C9B0"/>
+    <path class="b b6" d="M16.3146 1.02085L11.8208 0.785339L11.5853 5.27917L16.0791 5.51468L16.3146 1.02085Z" fill="#FF66CC"/>
+    <path class="b b7" d="M15.9953 6.11247L11.5125 6.50467L11.9047 10.9875L16.3875 10.5953L15.9953 6.11247Z" fill="#A569BD"/>
+    <path class="b b8" d="M16.4229 11.9475L11.9475 11.4771L11.4771 15.9525L15.9525 16.4229L16.4229 11.9475Z" fill="#34BE5B"/>
+  </g>
+</svg>

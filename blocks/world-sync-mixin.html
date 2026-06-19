@@ -1,0 +1,93 @@
+<script type="module">
+  export default {
+    lastChange: JSON.stringify(handle.doc().world),
+    syncDocToWorld,
+
+    init() {
+      this.syncDocToWorld(handle.doc(), this.$host)
+      this.$watch("doc.world", (newVal, oldVal) => {
+        if (this.lastChange === JSON.stringify(handle.doc().world)) return
+
+        this.syncDocToWorld(handle.doc(), this.$host)
+        this.lastChange = JSON.stringify(handle.doc().world)
+      })
+    },
+  }
+
+  function syncDocToWorld(doc, host = document.querySelector("world-block")) {
+    const isBlock = (el) =>
+      el instanceof Element && el.constructor?.name === "AlpineBlockSFC"
+
+    const desired = new Map(doc.world.map((n) => [n.id, n]))
+    const byId = Object.fromEntries(doc.world.map((n) => [n.id, n]))
+
+    // Remove extras anywhere under host
+    for (const el of host.querySelectorAll("*")) {
+      if (!isBlock(el)) continue
+      if (!desired.has(el.id)) el.remove()
+    }
+
+    const ensureEl = (node) => {
+      if (!node) return null
+
+      // Ensure parent container
+      const parent =
+        (node.parentId && byId[node.parentId]
+          ? ensureEl(byId[node.parentId])
+          : host) || host
+
+      let el = document.getElementById(node.id)
+
+      // Create or replace using insertAdjacentHTML
+      if (!el || el.tagName.toLowerCase() !== node.tagName) {
+        // Build HTML string with all props
+        const props = node.props || {}
+        const attrs = Object.entries(props)
+          .filter(([name]) => !name.startsWith(":") && !name.startsWith("@"))
+          .map(([name, value]) => {
+            const str = value == null ? "" : String(value)
+            return `${name}="${str.replace(/"/g, "&quot;")}"`
+          })
+          .join(" ")
+
+        const html = `<${node.tagName} id="${node.id}" ${attrs}></${node.tagName}>`
+
+        if (el) {
+          // Replace existing element
+          el.insertAdjacentHTML("beforebegin", html)
+          el.remove()
+        } else {
+          // Insert into parent
+          parent.insertAdjacentHTML("beforeend", html)
+        }
+        el = document.getElementById(node.id)
+      } else {
+        // Update existing element's props
+        const props = node.props || {}
+        const desiredNames = new Set(Object.keys(props))
+
+        for (const { name } of [...el.attributes]) {
+          if (name === "id" || name.startsWith(":") || name.startsWith("@"))
+            continue
+          if (!desiredNames.has(name)) el.removeAttribute(name, true) // syncing
+        }
+
+        for (const [name, value] of Object.entries(props)) {
+          if (name.startsWith(":") || name.startsWith("@")) continue
+          const str = value == null ? "" : String(value)
+          if (el.getAttribute(name) !== str) el.setAttribute(name, str, true) // syncing
+        }
+
+        // Ensure correct parent
+        if (el.parentElement !== parent) {
+          parent.insertAdjacentElement("beforeend", el)
+        }
+      }
+
+      return el
+    }
+
+    // Create / update all (parents auto-created first via recursion)
+    for (const node of doc.world) ensureEl(node)
+  }
+</script>

@@ -1,0 +1,36 @@
+<div
+  :style="{
+  height: doc.devices.find((d) => d.id === props.deviceId).height + 'px',
+  width: doc.devices.find((d) => d.id === props.deviceId).width + 'px'
+}"
+>
+  <button
+    @click="doc.devices.find(d => d.id === props.deviceId).world = []; sync()"
+  >
+    Clear
+  </button>
+  <slot></slot>
+</div>
+
+<script type="module">
+  export default {
+    device: null,
+    lastChange: null,
+    init() {
+      this.device = this.doc.devices.find((d) => d.id === this.props.deviceId)
+      if (!this.device) throw new Error("Cannot find device by id!")
+
+      this.syncDocToWorld({ ...this.device }, this.$host)
+    },
+
+    sync() {
+      this.device = this.doc.devices.find((d) => d.id === this.props.deviceId)
+      if (this.lastChange === JSON.stringify(this.device.world)) return
+
+      this.syncDocToWorld({ ...this.device }, this.$host)
+      this.lastChange = JSON.stringify(this.device.world)
+    },
+  }
+</script>
+
+<style></style>

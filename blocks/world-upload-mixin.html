@@ -1,0 +1,46 @@
+<script type="module">
+  export default {
+    draggedOver: false,
+    init() {
+      this.$el.addEventListener("dragover", this.handleDragOver)
+      this.$el.addEventListener("drop", this.handleDrop)
+
+      this.$el.addEventListener("dragend", this.handleDragEnd)
+      this.$el.addEventListener("dragleave", this.handleDragEnd)
+    },
+    handleDragEnd() {
+      this.draggedOver = false
+    },
+    handleDragOver(e) {
+      e.preventDefault()
+      this.draggedOver = true
+    },
+    async handleDrop(e) {
+      e.preventDefault()
+      this.draggedOver = false
+
+      for (const file of e.dataTransfer.files) {
+        if (file.type !== "text/csv") {
+          alert("Only CSV files are supported!")
+          return
+        }
+
+        console.log(file.name)
+
+        const text = await file.text()
+        const fileHandle = await repo.create({
+          name: file.name,
+          createdAt: new Date().toISOString(),
+          data: text,
+        })
+
+        window.handle.change((doc) => {
+          if (!doc.files) {
+            doc.files = []
+          }
+          doc.files.push(fileHandle.documentId)
+        })
+      }
+    },
+  }
+</script>

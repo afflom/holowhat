@@ -1,0 +1,101 @@
+<div @click.outside="userOpen = false">
+  <button
+    @click.stop="userOpen = !userOpen"
+    :style="{
+    cursor: 'pointer',
+      background: '#7289da',
+      border: 0,
+      padding: '6px',
+      border: '1px solid rgba(255, 255, 255, 0.5)',
+      borderRadius: '50%',
+      color: 'white'
+  }"
+  >
+    <div
+      :style="{
+      width: '22px'
+    }"
+      class=""
+      x-text="user?.user_metadata?.displayName?.slice(0,1) || '?'"
+    ></div>
+  </button>
+  <div
+    @click.stop
+    x-show="userOpen"
+    x-transition=""
+    :style="{ textAlign: 'right', color: 'white', position: 'absolute', marginTop: '4px', right: 0 }"
+  >
+    <input
+      :style="{
+        background: '#222',
+        color: 'grey',
+        border: '1px solid rgba(255, 255, 255, 0.5)',
+        padding: '4px 8px',
+        borderRadius: '4px'
+      }"
+      disabled=""
+      :value="user?.email"
+    />
+    <input
+      :style="{
+        background: '#222',
+        color: 'white',
+        border: '1px solid rgba(255, 255, 255, 0.5)',
+        padding: '4px 8px',
+        borderRadius: '4px'
+      }"
+      @input.debounce.1000ms="updateUsername"
+      x-model="username"
+    />
+    <a href="/api/auth/logout">Logout</a>
+  </div>
+</div>
+
+<script type="module">
+  import { createClient } from "https://esm.sh/@supabase/supabase-js"
+
+  const supabase = createClient(
+    "https://ifteoortevgzwvlbkjev.supabase.co",
+    "sb_publishable_HVSLUqC4MdXCJzTbbJR24w_ylDOODOF",
+  )
+
+  export default {
+    mixins: ["@playground/block-mixin"],
+    userOpen: false,
+    user: {},
+    username: "",
+    init() {
+      supabase.auth.getUser().then((resp) => {
+        this.user = resp.data.user
+        this.username = this.user?.user_metadata?.displayName || "?"
+      })
+    },
+    async updateUsername() {
+      await supabase.auth.updateUser({
+        data: {
+          displayName: this.username,
+        },
+      })
+
+      await supabase.auth.getUser().then((resp) => {
+        this.user = resp.data.user
+        this.username = this.user?.user_metadata?.displayName || "?"
+      })
+    },
+  }
+</script>
+
+<style>
+  button {
+    width: 36px;
+    height: 36px;
+  }
+
+  input {
+    font-size: 1.2rem;
+  }
+
+  a {
+    color: white;
+  }
+</style>

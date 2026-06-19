@@ -1,0 +1,73 @@
+<div class="container">
+  <h1>Devices</h1>
+  <p>
+    Mobile phones and tablets that use the Playground App Toolkit, or devices
+    visiting this url from mobile web will appear here in the device list with a
+    unique ID.
+  </p>
+
+  <p class="warning" x-show="!doc?.devices?.length" x-transition>
+    You have no devices
+  </p>
+
+  <ol>
+    <template x-for="device in doc?.devices">
+      <li>
+        <flex-block :style="{ justifyContent: 'space-between', width: '100%' }">
+          <div :style="{ display: 'flex', flexDirection: 'column' }">
+            <span x-text="device.id"></span>
+            <span x-text="device.type"></span>
+          </div>
+          <button @click="playDevice(device.id)">Play</button>
+        </flex-block>
+      </li>
+    </template>
+  </ol>
+</div>
+
+<script type="module">
+  export default {
+    mixins: ["@playground/block-mixin"],
+    playDevice(id) {
+      const screenWidth = window.innerWidth / 2 - 550
+      const screenHeight = window.innerHeight / 2 - 300
+      const x = Math.round(screenWidth + this.$world.scrollX)
+      const y = Math.round(screenHeight + this.$world.scrollY)
+
+      const html = `<window-block
+        size="Auto"
+        x-on:close.stop="$el.remove()"
+        nav-title="Device"
+        x="${x}"
+        y="${y}"
+      >
+        <device-block device-id="${id}"></device-block>
+      </window-block>`
+
+      this.$world.$host.insertAdjacentHTML("beforeend", html)
+    },
+  }
+</script>
+
+<style>
+  h1,
+  p {
+    margin: 0;
+  }
+
+  button {
+    font-family: inherit;
+    font-size: 1.125rem;
+    padding: 6px 10px;
+  }
+
+  .container {
+    max-width: 400px;
+    padding: 12px;
+  }
+
+  .warning {
+    margin-top: 8px;
+    color: var(--red);
+  }
+</style>

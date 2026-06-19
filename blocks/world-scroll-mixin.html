@@ -1,0 +1,168 @@
+<script type="module">
+  export default {
+    scale: 1,
+    scrollX: 0,
+    scrollY: 0,
+    init() {
+      this.world = this.$host.shadowRoot.querySelector(".world")
+      this.space = this.$host.shadowRoot.querySelector(".space")
+
+      // Load scrollX and scrollY from localStorage if available
+      const scrollX = localStorage.getItem("world-scrollX")
+      const scrollY = localStorage.getItem("world-scrollY")
+      const scale = localStorage.getItem("world-scale")
+      if (scrollX !== null && scrollY !== null) {
+        this.scrollX = parseInt(scrollX, 10)
+        this.scrollY = parseInt(scrollY, 10)
+        this.scale = parseInt(scale, 10) || 1
+      } else {
+        this.scrollX = (this.space.offsetWidth - this.world.offsetWidth) / 2
+        this.scrollY = (this.space.offsetHeight - this.world.offsetHeight) / 2
+      }
+
+      this.space.style.transform = `translate(-${this.scrollX}px, -${this.scrollY}px) scale(${this.scale})`
+
+      this._gesture = {
+        type: null,
+        scrollEl: null,
+        startedOnScrollable: false,
+        lastTouch: null,
+        wheelTimer: null,
+      }
+
+      document.addEventListener("wheel", onWheel.bind(this), {
+        passive: false,
+      })
+
+      document.addEventListener("touchmove", handleScroll.bind(this), {
+        passive: true,
+      })
+
+      this.$watch("scale", () => {
+        this.space.style.transform = `translate(-${this.scrollX}px, -${this.scrollY}px) scale(${this.scale})`
+        localStorage.setItem("world-scale", this.scale)
+      })
+
+      this.$watch("scrollX", () => {
+        this.space.style.transform = `translate(-${this.scrollX}px, -${this.scrollY}px) scale(${this.scale})`
+        localStorage.setItem("world-scrollX", this.scrollX)
+      })
+      this.$watch("scrollY", () => {
+        this.space.style.transform = `translate(-${this.scrollX}px, -${this.scrollY}px) scale(${this.scale})`
+        localStorage.setItem("world-scrollY", this.scrollY)
+      })
+    },
+  }
+
+  function onWheel(e) {
+    const dx = e.deltaX || 0
+    const dy = e.deltaY || 0
+    handleScroll.call(this, e, dx, dy, "wheel")
+  }
+
+  function endGesture() {
+    this._gesture = {
+      type: null,
+      scrollEl: null,
+      startedOnScrollable: false,
+      lastTouch: null,
+      wheelTimer: null,
+    }
+  }
+
+  function handleScroll(e, dx, dy, kind) {
+    // Zooming
+    if (e.ctrlKey) {
+      e.preventDefault()
+
+      if ((this.scale < 2 && dy < 0) || (this.scale > 0.5 && dy > 0)) {
+        this.scale -= dy * 0.008
+      }
+
+      return
+    }
+
+    if (kind === "wheel" && !this._gesture.type) {
+      this._gesture.type = "wheel"
+      this._gesture.scrollEl = findScrollable(e.target, e.clientX, e.clientY)
+      this._gesture.startedOnScrollable =
+        !!this._gesture.scrollEl &&
+        canScrollFurther(this._gesture.scrollEl, dx, dy)
+    }
+
+    if (kind === "wheel") {
+      clearTimeout(this._gesture.wheelTimer)
+      this._gesture.wheelTimer = setTimeout(() => endGesture.call(this), 50)
+    }
+
+    if (this._gesture.startedOnScrollable && this._gesture.scrollEl) {
+      return
+    }
+
+    // is desktop
+    if (dx !== undefined) {
+      e.preventDefault()
+    }
+
+    const newScrollX = this.scrollX + dx
+    const newScrollY = this.scrollY + dy
+
+    const maxScrollX = Math.max(
+      0,
+      this.space.offsetWidth - this.world.offsetWidth,
+    )
+    const maxScrollY = Math.max(
+      0,
+      this.space.offsetHeight - this.world.offsetHeight,
+    )
+
+    this.scrollX = Math.round(Math.max(0, Math.min(newScrollX, maxScrollX)))
+    this.scrollY = Math.round(Math.max(0, Math.min(newScrollY, maxScrollY)))
+  }
+
+  function findScrollable(start, x, y) {
+    let el = start instanceof Element ? start : null
+
+    function findDeepestElementWithShadowRoot(element, x, y) {
+      while (element && element.shadowRoot) {
+        const next = element.shadowRoot.elementsFromPoint(x, y)[0]
+        if (!next || next === element) break
+        element = next
+      }
+      return element
+    }
+
+    if (el && el.shadowRoot) {
+      el = findDeepestElementWithShadowRoot(el, x, y)
+    }
+
+    while (el) {
+      const style = getComputedStyle(el)
+      const canOverflowY = /(auto|scroll|overlay)/.test(style.overflowY)
+      const canOverflowX = /(auto|scroll|overlay)/.test(style.overflowX)
+      if (
+        (canOverflowY && el.scrollHeight > el.clientHeight) ||
+        (canOverflowX && el.scrollWidth > el.clientWidth)
+      )
+        return el
+      el = el.parentElement
+    }
+    return null
+  }
+
+  function canScrollFurther(el, dx, dy) {
+    if (dx !== 0 && el.scrollWidth > el.clientWidth) {
+      const maxX = el.scrollWidth - el.clientWidth
+      const nextX = el.scrollLeft + dx
+      if (dx < 0 && el.scrollLeft > 0) return true
+      if (dx > 0 && el.scrollLeft < maxX) return true
+    }
+    if (dy !== 0 && el.scrollHeight > el.clientHeight) {
+      const maxY = el.scrollHeight - el.clientHeight
+      const nextY = el.scrollTop + dy
+      if (dy < 0 && el.scrollTop > 0) return true
+      if (dy > 0 && el.scrollTop < maxY) return true
+    }
+    return false
+  }
+</script>

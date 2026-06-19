@@ -1,0 +1,62 @@
+<div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Created At</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <template x-for="file in files" :key="file.id">
+        <tr>
+          <td x-text="file.name"></td>
+          <td x-text="new Date(file.createdAt).toLocaleString()"></td>
+          <!-- <td><button @click="openFile">Open</button></td> -->
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>
+
+<script type="module">
+  export default {
+    files: [],
+    init() {
+      this.getFileHandles()
+      this.$watch("doc?.files", () => {
+        this.getFileHandles()
+      })
+    },
+    async getFileHandles() {
+      this.files = []
+      if (!this.doc?.files) {
+        this.doc.files = []
+      }
+      for (let file of this.doc?.files) {
+        const fileHandle = await repo.find(file)
+        this.files.push({ id: file, ...fileHandle.doc() })
+      }
+    },
+    openFile() {
+      const html = `<window-block></window-block>`
+    },
+  }
+</script>
+
+<style>
+  div {
+    padding: 8px;
+  }
+
+  table {
+    line-height: 1.5;
+    border-collapse: collapse;
+    width: 100%;
+    display: table;
+  }
+
+  th {
+    text-align: left;
+  }
+</style>

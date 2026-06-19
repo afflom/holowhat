@@ -1,0 +1,162 @@
+<div @keydown="save" class="wrapper"></div>
+
+<script type="module">
+  import { basicSetup } from "https://esm.sh/codemirror"
+  import {
+    EditorView,
+    ViewPlugin,
+    Decoration,
+    keymap,
+    WidgetType,
+  } from "https://esm.sh/@codemirror/view"
+  import {
+    ChangeSet,
+    Annotation,
+    StateField,
+    RangeSetBuilder,
+    StateEffect,
+    Prec,
+  } from "https://esm.sh/@codemirror/state"
+  import { html } from "https://esm.sh/@codemirror/lang-html"
+  import { javascriptLanguage } from "https://esm.sh/@codemirror/lang-javascript"
+  import { vsCodeDark as theme } from "https://esm.sh/@fsegurai/codemirror-theme-vscode-dark"
+  import { vscodeKeymap } from "https://esm.sh/@replit/codemirror-vscode-keymap"
+
+  const playgroundTheme = EditorView.theme(
+    {
+      "&": { fontSize: "13px" },
+      ".cm-editor": { height: "100%" },
+      ".cm-scroller": {
+        height: "600px",
+        overflow: "auto",
+        fontFamily: "'Source Code Pro', monospace",
+        borderBottomRightRadius: "4px",
+      },
+      ".cm-tooltip-autocomplete": {
+        position: "absolute !important",
+      },
+    },
+    { dark: true },
+  )
+
+  function findCustomAttributes(s) {
+    const re = /^(@|:|x-)/,
+      out = []
+    const grab = (root) => {
+      root.querySelectorAll("*").forEach((el) => {
+        for (const { name } of el.attributes) if (re.test(name)) out.push(name)
+      })
+      root.querySelectorAll("template").forEach((t) => grab(t.content))
+    }
+    grab(new DOMParser().parseFromString(s, "text/html"))
+    return out
+  }
+
+  export default {
+    mixins: ["@playground/code-peers-mixin", "@playground/code-scroll-mixin"],
+    name: "",
+    init() {
+      this.loadEditor()
+
+      this.$watch("props.pkgId", () => this.loadEditor())
+      this.$watch("props.file", () => this.loadEditor())
+    },
+    save() {
+      if (
+        (this.$event.metaKey || this.$event.ctrlKey) &&
+        this.$event.key === "s"
+      ) {
+        this.$event.stopPropagation()
+        this.$event.preventDefault()
+
+        this.$dispatch("save", {
+          source: this.name,
+        })
+        this.dirty = false
+        return true
+      }
+    },
+    async loadEditor() {
+      if (!this.props.pkgId) return
+
+      this.name = this.props.file
+        .replace(/^@/, "")
+        .split("/")
+        .slice(1)
+        .join("-")
+      this.$el.replaceChildren()
+
+      const pgHandle = await repo.find(this.props.pkgId)
+      const source = pgHandle.doc()[this.name]
+
+      const nestedAttributes = [
+        ...new Set([
+          "x-text",
+          "x-data",
+          "x-init",
+          "x-show",
+          "x-bind",
+          "x-on",
+          "x-text",
+          "x-html",
+          "x-model",
+          "x-modelable",
+          "x-for",
+          "x-transition",
+          "x-effect",
+          "x-ignore",
+          "x-ref",
+          "x-cloak",
+          "x-teleport",
+          "x-if",
+          "x-id",
+          ":class",
+          ":style",
+          ":src",
+          "@click",
+          "@input",
+          "@mousedown",
+          "@scroll",
+          "@mouseup",
+          "@blur",
+          ...findCustomAttributes(source),
+        ]),
+      ].map((name) => ({
+        name,
+        parser: javascriptLanguage.parser,
+      }))
+
+      const alpineHtml = html({
+        nestedAttributes,
+      })
+
+      this.view = new EditorView({
+        doc: source,
+        parent: this.$el,
+        extensions: [
+          basicSetup,
+          window.automergeSyncPlugin({
+            handle: pgHandle,
+            path: [this.name],
+            automerge: window.Automerge,
+            codemirror: {
+              state: { Annotation, ChangeSet },
+              view: { ViewPlugin },
+            },
+          }),
+          playgroundTheme,
+          theme,
+          keymap.of(vscodeKeymap),
+          alpineHtml,
+        ],
+      })
+    },
+  }
+</script>
+
+<style>
+  .wrapper {
+    width: 844px;
+    height: 600px;
+  }
+</style>

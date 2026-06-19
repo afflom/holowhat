@@ -1,0 +1,96 @@
+<ul
+  class="menu"
+  :style="{ transform: `translate(${props.x || 0}px, ${props.y || 0}px)`}"
+>
+  <div
+    :style="{ textTransform: 'capitalize', borderBottom: '0.5px solid grey', padding: '0 8px', fontSize: label?.length > 12 ? '18px' : '22px' }"
+    x-text="label"
+  ></div>
+  <li @click="duplicate()">
+    <img src="/assets/img/duplicate.svg" /> Duplicate
+  </li>
+  <li @click="remove()"><img src="/assets/img/trash.svg" /> Remove</li>
+  <li @click="openInspector()">
+    <img src="/assets/img/inspector.svg" /> Inspect
+  </li>
+  <li @click="openScript()"><img src="/assets/img/code-slash.svg" /> Script</li>
+</ul>
+
+<script type="module">
+  export default {
+    host: null,
+    label: "",
+    init() {
+      this.host = Alpine.$data(this.$host).$host
+    },
+    remove() {
+      this.host?.remove()
+      this.menuOpen = false
+    },
+    duplicate() {
+      const dup = this.host.cloneNode()
+      dup.removeAttribute("id")
+
+      document.getElementById(this.host.id).after(dup)
+
+      this.menuOpen = false
+    },
+    openInspector(pkg, location) {
+      this.openApp("@playground", "inspector-app", {
+        ["x-data"]: `{ target: '${this.host.id}' }`,
+      })
+      this.menuOpen = false
+    },
+    openScript(pkg, location) {
+      this.openApp("@playground", "library-app", {
+        ["selected-package"]: this.package,
+        ["selected-file"]: this.tag.toLowerCase(),
+      })
+      this.menuOpen = false
+    },
+  }
+</script>
+
+<style>
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  ul {
+    position: fixed;
+    top: 0;
+    left: 0;
+    margin: 0;
+    z-index: 99999;
+    padding-left: 0;
+    list-style: none;
+    background: white;
+    border: 0.5px solid grey;
+    width: 140px;
+    color: black;
+    padding: 6px 0;
+  }
+
+  li {
+    width: 138px;
+    cursor: pointer;
+    list-style: none;
+    padding: 3px 5px 3px 8px;
+    display: flex;
+    justify-content: start;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.25rem;
+  }
+
+  li:hover {
+    background: #eee;
+  }
+
+  .menu img {
+    width: 14px;
+    height: 14px;
+  }
+</style>

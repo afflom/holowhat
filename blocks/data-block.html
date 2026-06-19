@@ -1,0 +1,262 @@
+<flex-block :style="{padding: 0}">
+  <flex-block :style="{ flexDirection: 'column', padding: '8px 4px' }">
+    <template x-for="(table, index) in doc.tables">
+      <div
+        @click="selectedIndex = index"
+        :style="{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: index === selectedIndex ? '#dfe2e2' : ''
+          }"
+      >
+        <template x-if="!table.name">
+          <input
+            x-model="tableName"
+            @blur.stop.prevent="validateTableName(index, true)"
+            @keydown.enter="validateTableName(index, true)"
+          />
+        </template>
+        <button class="table" x-text="table.name"></button>
+        <button
+          @click.stop="doc.tables = doc.tables.filter((t,i) => i !== index)"
+          :style="{
+              marginRight: '12px',
+          }"
+          class="remove"
+        >
+          <img src="/assets/icons/remove.svg" />
+        </button>
+      </div>
+    </template>
+    <button
+      class="add"
+      :style="{ marginTop: '8px', alignSelf: 'center' }"
+      @click="newTable()"
+    >
+      <img src="/assets/img/add.svg" />
+    </button>
+  </flex-block>
+  <flex-block class="table-wrapper" :style="{ padding: '8px 4px' }">
+    <table>
+      <!-- header -->
+      <thead>
+        <tr>
+          <template
+            x-for="(column, index) in doc.tables[selectedIndex]?.columns"
+          >
+            <th>
+              <flex-block
+                :style="{ padding: 0, justifyContent: 'space-between' }"
+              >
+                <template x-if="!column || editedColIndex === index">
+                  <input
+                    x-model="colName"
+                    x-effect="validateColName(index)"
+                    @blur="validateColName(index, true)"
+                    @keydown.enter="validateColName(index, true)"
+                  />
+                </template>
+                <template x-if="column && editedColIndex !== index">
+                  <span x-text="column"></span>
+                </template>
+                <flex-block
+                  :style="{padding: 0, gap: '4px', alignItems: 'center'}"
+                >
+                  <button @click="editedColIndex = index; colName = column">
+                    <img
+                      :style="{ width: '16px', height: '16px' }"
+                      src="/assets/img/pen.svg"
+                    />
+                  </button>
+                  <button
+                    @click="doc.tables[selectedIndex].columns = doc.tables[selectedIndex].columns.filter((item, i) => i !== index)"
+                  >
+                    <img
+                      :style="{ width: '16px', height: '16px' }"
+                      src="/assets/img/trash.svg"
+                    />
+                  </button>
+                </flex-block>
+              </flex-block>
+            </th>
+          </template>
+          <th>
+            <button
+              class="add"
+              @click="doc.tables[selectedIndex].columns.push('')"
+            >
+              <img src="/assets/img/add.svg" />
+            </button>
+          </th>
+        </tr>
+      </thead>
+
+      <!-- data -->
+      <tbody>
+        <template x-for="(row, rowIdx) in doc.tables[selectedIndex].rows">
+          <tr>
+            <template
+              x-for="(col, colIdx) in doc.tables[selectedIndex].columns"
+            >
+              <td>
+                <input
+                  :id="rowIdx + ' ' + col"
+                  x-model="doc.tables[selectedIndex].rows[rowIdx][col]"
+                />
+              </td>
+            </template>
+            <td :style="{ position: 'sticky', right: '-5px' }">
+              <button
+                class="remove"
+                @click="doc.tables[selectedIndex].rows = doc.tables[selectedIndex].rows.filter((r, i) => i !== rowIdx)"
+              >
+                <img src="/assets/icons/remove.svg" />
+              </button>
+            </td>
+          </tr>
+        </template>
+        <tr>
+          <td>
+            <button
+              class="add"
+              @click="
+              if (!doc.tables[selectedIndex].rows) {
+                doc.tables[selectedIndex].rows = []
+              }
+              doc.tables[selectedIndex].rows.push({})
+            "
+            >
+              <img src="/assets/img/add.svg" />
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </flex-block>
+</flex-block>
+
+<script type="module">
+  export default {
+    mixins: [],
+    editedColIndex: null,
+    selectedIndex: 0,
+    tableName: "",
+    colName: "",
+    init() {
+      if (!this.doc.tables) {
+        this.doc.tables = []
+      }
+    },
+    newTable() {
+      this.doc.tables.push({
+        name: "",
+        columns: [],
+        rows: [],
+      })
+    },
+    validateTableName(index, create) {
+      if (create) {
+        this.doc.tables[index].name = this.tableName
+        this.tableName = ""
+      }
+    },
+    validateColName(index, create) {
+      const old = this.doc.tables[this.selectedIndex].columns[index]
+      if (create) {
+        this.doc.tables[this.selectedIndex].columns[index] = this.colName
+
+        for (let row of this.doc.tables[this.selectedIndex].rows) {
+          if (row[old]) {
+            row[this.colName] = row[old]
+          }
+        }
+
+        this.colName = ""
+        this.editedColIndex = null
+      }
+    },
+  }
+</script>
+
+<style>
+  .table-wrapper {
+    max-width: 640px;
+    max-height: 380px;
+    overflow-x: scroll;
+    position: relative;
+    padding: 0;
+  }
+
+  .table {
+    padding: 6px 12px;
+    font-size: 1.25rem;
+  }
+
+  input,
+  span {
+    margin-right: 15px;
+  }
+
+  button {
+    font-size: 0.9rem;
+    font-family: inherit;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: none;
+    border: 0;
+  }
+
+  button:hover {
+    cursor: pointer;
+  }
+
+  button.remove,
+  button.add {
+    border-radius: 50%;
+  }
+
+  button.add:hover {
+    background: var(--green);
+  }
+
+  button.remove:hover {
+    background: var(--red);
+  }
+
+  button.remove:hover {
+    background: var(--red);
+  }
+
+  table {
+    line-height: 1.5;
+    border-collapse: collapse;
+    width: 100%;
+    display: table;
+  }
+
+  thead {
+    border-block-end: 1px solid black;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 1;
+  }
+
+  th,
+  td {
+    background: white;
+    border: 1px solid lightgrey;
+    padding: 0.25rem 0.75rem;
+  }
+
+  img {
+    width: 18px;
+    height: 18px;
+  }
+</style>

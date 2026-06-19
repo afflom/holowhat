@@ -1,0 +1,137 @@
+<div
+  id="world"
+  class="world"
+  @peer-mousemove.document="peerMouseMove"
+  @mousemove.document="handleMouseMove"
+  @touchmove.document="handleMouseMove"
+  @peer-updated-file.window="updatedFile"
+>
+  <div
+    id="space"
+    class="space"
+    :style="{
+      opacity: draggedOver ? '50%' : 'unset'
+    }"
+  >
+    <template x-teleport="body">
+      <navbar-block data-block="world-block"></navbar-block>
+    </template>
+    <template x-teleport="body">
+      <minimap-block data-block="world-block"></minimap-block>
+    </template>
+    <slot></slot>
+  </div>
+</div>
+
+<script type="module">
+  export default {
+    mixins: [
+      "@playground/block-mixin",
+      "@playground/world-sync-mixin",
+      "@playground/world-scroll-mixin",
+      "@playground/world-theme-mixin",
+      "@playground/world-upload-mixin",
+      "@playground/world-cell-mixin",
+    ],
+    peerMouseMove,
+    handleMouseMove,
+    async updatedFile(event) {
+      const { pkgId, pkg, tag, senderId } = event.detail
+
+      console.log(event.detail)
+
+      if (!pkgId) return
+
+      const pgHandle = await repo.find(pkgId)
+      const html = pgHandle.doc()[tag]
+
+      document.querySelector(`#${pkg.replace("@", "")}-${tag}`).innerHTML = html
+
+      if (!tag.endsWith("block")) return
+
+      const wc = customElements.get(tag)
+      if (wc) wc.reloadAllBlocks()
+    },
+    init() {
+      // the remove doesn't work for some reason
+      document.removeEventListener("keydown", this.commandK)
+      document.addEventListener("keydown", this.commandK.bind(this))
+
+      this.world = this.$host.shadowRoot.querySelector(".world")
+      this.space = this.$host.shadowRoot.querySelector(".space")
+
+      this._heartbeatInterval = setInterval(() => {
+        this.$broadcast("heartbeat", { timestamp: Date.now() })
+      }, 1000)
+    },
+    commandK(e) {
+      if (e.key.toLowerCase() === "k" && e.metaKey) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+
+        this.openLibrary()
+      }
+    },
+  }
+
+  function handleMouseMove(e) {
+    let mouseX, mouseY
+    if (e.type.startsWith("touch")) {
+      const touch = e.touches[0] || e.changedTouches[0]
+      mouseX = touch.clientX + this.scrollX
+      mouseY = touch.clientY + this.scrollY
+    } else {
+      mouseX = e.clientX + this.scrollX
+      mouseY = e.clientY + this.scrollY
+    }
+    this.$dispatch("world-mousemove", {
+      mouseX,
+      mouseY,
+    })
+    this.$broadcast("mousemove", {
+      mouseX,
+      mouseY,
+    })
+  }
+
+  function peerMouseMove(e) {
+    let cursor = this.space.querySelector(
+      `cursor-block[peer="${e.detail.senderId}"]`,
+    )
+    if (!cursor) {
+      this.space.insertAdjacentHTML(
+        "beforeend",
+        `<cursor-block peer="${e.detail.senderId}"></cursor-block>`,
+      )
+    }
+  }
+</script>
+
+<style>
+  .world {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .world::before {
+    z-index: -1;
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    text-align: center;
+  }
+  .space {
+    touch-action: none;
+    will-change: transform;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4096px;
+    height: 4096px;
+    transform: translate3d(0, 0, 0);
+  }
+</style>

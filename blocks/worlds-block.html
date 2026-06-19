@@ -1,0 +1,213 @@
+<div x-effect="getWorlds()" class="wrapper">
+  <div
+    :style="{
+    position: 'absolute',
+    top: '12px',
+    right: '12px'
+  }"
+  >
+    <user-block></user-block>
+  </div>
+
+  <img class="logo" src="/assets/img/favicon.svg" />
+
+  <flex-block
+    :style="{ flexDirection: 'column', alignItems: 'center', fontSize: '4rem', color: 'white' }"
+  >
+    <h1>Welcome to Playground!</h1>
+    <div class="grey">The collaborative web toolkit</div>
+  </flex-block>
+
+  <flex-block
+    :style="{ gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }"
+  >
+    <template x-for="world in worlds">
+      <div
+        @click="location.href = './index.html?id=' + (world.slug || world.automerge_id)"
+        class="world"
+      >
+        <div class="pane">
+          <img src="/assets/img/globe-alt.svg" />
+        </div>
+        <div
+          class="title"
+          x-text="(await repo.find(world.automerge_id)).doc().name || '???'"
+        >
+          ???
+        </div>
+      </div>
+    </template>
+  </flex-block>
+
+  <flex-block>
+    <button @click="createWorld()">Create a World</button>
+  </flex-block>
+</div>
+
+<script type="module">
+  export default {
+    mixins: [],
+    worlds: [],
+    async getWorlds() {
+      const data = await fetch("/api/worlds", {
+        headers: new Headers({
+          accept: "application/json",
+        }),
+        credentials: "include",
+      }).then((resp) => resp.json())
+
+      const user = localStorage.getItem("user")
+      let userHandle
+
+      if (user) {
+        userHandle = await repo.find(user)
+      }
+
+      this.worlds = data.map((w) => ({
+        automerge_id: w.automerge_id,
+        slug: w.slug,
+      }))
+
+      if (userHandle) {
+        this.worlds = this.worlds.concat(
+          userHandle.doc().worlds.map((w) => ({
+            automerge_id: w,
+          })),
+        )
+      }
+    },
+    async createWorld() {
+      const user = localStorage.getItem("user")
+      const userHandle = await repo.find(user)
+
+      const worldHandle = repo.create()
+      worldHandle.change((doc) => {
+        doc.packages = []
+        doc.theme = "night"
+        doc.font = "Nanum Pen Script"
+        doc.world = []
+      })
+
+      userHandle.change((doc) => {
+        doc.worlds.push(worldHandle.documentId)
+      })
+
+      await fetch("/api/worlds", {
+        method: "POST",
+        credentials: "include",
+        headers: new Headers({
+          accept: "application/json",
+        }),
+        body: JSON.stringify({
+          id: worldHandle.documentId,
+        }),
+      })
+
+      await new Promise(r => setTimeout(r, 500)); await this.getWorlds()
+    },
+  }
+</script>
+
+<style>
+  @container content (max-width: 500px) {
+    h1 {
+      font-size: 4rem;
+      line-height: 1;
+    }
+    .grey {
+      line-height: 1;
+      margin-top: 20px;
+    }
+  }
+
+  @container content (max-height: 500px) {
+    flex-block:first-of-type {
+      margin-top: -80px;
+    }
+
+    .logo {
+      right: 24px;
+    }
+  }
+
+  .wrapper {
+    position: relative;
+    background: #48c9b0;
+
+    width: 100%;
+    height: 100%;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    text-align: center;
+
+    container: content / size;
+    padding-top: 80px;
+  }
+
+  .world {
+    cursor: pointer;
+    background: #7289da;
+    padding: 4px;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 1.5rem;
+    color: white;
+    width: 150px;
+    font-size: 1.2rem;
+  }
+
+  .pane {
+    width: 150px;
+    height: 100px;
+    background: white;
+    border-radius: 4px;
+
+    display: flex;
+    justify-content: center;
+  }
+
+  .pane img {
+    width: 40px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 4.5rem;
+  }
+
+  .grey {
+    margin-top: -24px;
+    font-size: 3rem;
+    color: rgba(0, 0, 0, 0.5);
+  }
+
+  .logo {
+    position: absolute;
+    top: 24px;
+    width: 30px;
+    height: 30px;
+    background: white;
+    padding: 8px;
+    border-radius: 4px;
+  }
+
+  button {
+    cursor: pointer;
+    background: #7289da;
+    color: white;
+    width: 100%;
+    border: 0;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 1.75rem !important;
+    font-family: inherit;
+
+    box-shadow: 0px 1px 2px 0px #ffffff40 inset;
+    box-shadow: 0px -1px 1px 0px #1d153a3d inset;
+    box-shadow: 0px 0px 8px 0px #0d609e8a;
+    backdrop-filter: blur(54px);
+  }
+</style>

@@ -1,0 +1,18 @@
+<script type="module">
+  export default {
+    block: {},
+    mixins: [],
+    init() {
+      if (!this.doc.blocks) this.doc.blocks = {}
+      if (!this.doc.blocks[this.$id]) this.doc.blocks[this.$id] = {}
+
+      this.block = this.doc.blocks[this.$id]
+    },
+    destroy() {
+      console.log("delete", this.$id)
+      handle.update((doc) => {
+        delete doc.blocks[this.$id]
+      })
+    },
+  }
+</script>

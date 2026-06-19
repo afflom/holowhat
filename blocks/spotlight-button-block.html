@@ -1,0 +1,61 @@
+<template x-if="spotlightOpen">
+  <spotlight-block></spotlight-block>
+</template>
+
+<button
+  @keydown.window="if ($event.key.toLowerCase() === 'k' && $event.metaKey) spotlightOpen = !spotlightOpen"
+  @click="spotlightOpen = !spotlightOpen"
+>
+  <img src="/assets/img/search.svg" />
+  Spotlight
+  <div>
+    <kbd>⌘</kbd>
+    <kbd :style="{ fontSize: '1.25rem'}">K</kbd>
+  </div>
+</button>
+
+<script type="module">
+  export default {
+    mixins: ["@playground/block-mixin"],
+
+    spotlightOpen: false,
+  }
+</script>
+
+<style>
+  button {
+    display: flex;
+    gap: 8px;
+    background: #dfe2e2;
+    border: 1px solid black;
+    border-radius: 8px;
+    align-items: center;
+    font-size: 1.25rem;
+    padding: 2px 8px;
+    cursor: pointer;
+  }
+
+  div {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    gap: 2px;
+  }
+
+  img {
+    width: 16px;
+    height: 16px;
+  }
+
+  kbd {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 4px;
+    background: #666;
+    color: white;
+    font-size: 0.75rem;
+    width: 16px;
+    height: 16px;
+  }
+</style>

@@ -1,0 +1,113 @@
+<script type="module">
+  export default {
+    dragging: false,
+    x: 0,
+    y: 0,
+    init() {
+      this.x = Math.round(Number(this.props.x)) || 0
+      this.y = Math.round(Number(this.props.y)) || 0
+
+      this.draggableRender()
+
+      this.$watch("props.x", () => {
+        this.x = Math.round(Number(this.props.x)) || 0
+        this.y = Math.round(Number(this.props.y)) || 0
+        this.draggableRender()
+      })
+      this.$watch("props.y", () => {
+        this.x = Math.round(Number(this.props.x)) || 0
+        this.y = Math.round(Number(this.props.y)) || 0
+
+        this.draggableRender()
+      })
+
+      this._onPeerDragging = (e) => {
+        const { x, y } = e.detail || {}
+
+        this.draggableRender(x, y)
+      }
+
+      document.addEventListener(
+        `peer-dragging-${this.$host.id}`,
+        this._onPeerDragging.bind(this),
+      )
+
+      this.$el.addEventListener("mousedown", this.draggableMouseDown.bind(this))
+      document.addEventListener("mousemove", this.draggableMouseMove.bind(this))
+      document.addEventListener("mouseup", this.draggableMouseUp.bind(this))
+    },
+    destroy() {
+      document.removeEventListener(
+        `peer-dragging-${this.$host.id}`,
+        this._onPeerDragging,
+      )
+    },
+    draggableMouseDown(e) {
+      if (e.target.shadowRoot) {
+        const els = e.target.shadowRoot?.elementsFromPoint(e.clientX, e.clientY)
+        if (
+          !els?.some((el) => el?.hasAttribute("drag-handle")) &&
+          !e.target.hasAttribute("drag-handle")
+        )
+          return
+      } else if (e.target.getRootNode() instanceof ShadowRoot) {
+        const els = e.target
+          .getRootNode()
+          ?.elementsFromPoint(e.clientX, e.clientY)
+        if (!els?.some((el) => el?.hasAttribute("drag-handle"))) return
+      }
+
+      e.stopPropagation()
+      this.dragging = true
+      this.startX = Math.round(this.x)
+      this.startY = Math.round(this.y)
+      this.startClientX = Math.round(e.clientX)
+      this.startClientY = Math.round(e.clientY)
+      this.$el.style.willChange = "transform"
+      e.preventDefault()
+    },
+    draggableMouseMove(e) {
+      if (!this.dragging) return
+
+      this.x = Math.round(
+        this.startX + (e.clientX - this.startClientX) / this.$world.scale,
+      )
+      this.y = Math.round(
+        this.startY + (e.clientY - this.startClientY) / this.$world.scale,
+      )
+      this.draggableRender()
+
+      // send to peers only listening for this id
+      this.$broadcast(`dragging-${this.$host.id}`, { x: this.x, y: this.y })
+    },
+    draggableMouseUp() {
+      if (!this.dragging) return
+      this.dragging = false
+      this.$el.style.willChange = ""
+
+      if (this.props.x !== this.x) this.props.x = Math.round(this.x)
+      if (this.props.y !== this.y) this.props.y = Math.round(this.y)
+
+      const host = this.$host
+      const parent = host?.parentElement
+
+      if (parent && host && parent.lastElementChild !== host) {
+        parent.appendChild(host)
+      }
+    },
+    draggableRender(x, y) {
+      const el = this.$el
+      const dragging = this.dragging
+
+      const tx = x ?? this.x
+      const ty = y ?? this.y
+
+      el.style.transform = `translate(${tx}px, ${ty}px) ${
+        dragging ? "scale(1.025)" : "scale(1)"
+      }`
+      el.style.transition = dragging ? "none" : "transform 0.1s ease-out"
+      el.style.zIndex = dragging ? 1000 : ""
+      el.style.opacity = dragging ? "0.98" : "1"
+    },
+  }
+</script>

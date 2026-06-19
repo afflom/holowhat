@@ -1,0 +1,506 @@
+<div class="wrapper">
+  <div
+    x-show="showAbout"
+    x-transition.opacity=""
+    class="overlay"
+    @click="showAbout = false; unlockScroll($el);"
+    x-ref="aboutModal"
+  >
+    <div @click.stop="" class="card">
+      <about-page-block></about-page-block>
+    </div>
+  </div>
+  <div
+    x-show="showLogin"
+    x-transition.opacity=""
+    class="overlay"
+    @click="showLogin = false; unlockScroll($el);"
+    x-ref="loginModal"
+  >
+    <div @click.stop="" class="card login-card">
+      <!-- Local-first/offline option -->
+      <flex-block :style="{ flexDirection: 'column', alignItems: 'center' }">
+        <img class="logo" src="/assets/img/favicon.svg" />
+        <h1>Playground</h1>
+        <button class="local-btn" @click="localLogin">
+          Continue Local-First
+        </button>
+        <div class="local-desc">
+          Your data is stored locally. No sign up required.
+        </div>
+      </flex-block>
+      <hr class="divider" />
+      <flex-block :style="{ width: '100%' }">
+        <input
+          x-show="state !== 'recover'"
+          x-model="email"
+          placeholder="Email"
+          autocomplete="username"
+        />
+      </flex-block>
+      <flex-block
+        :style="{ position: 'relative', width: '100%', alignItems: 'center' }"
+      >
+        <input
+          @keydown.enter="onClick"
+          x-show="state !== 'reset'"
+          x-model="password"
+          :type="showPassword ? 'text' : 'password'"
+          placeholder="Password"
+          :autocomplete="state === 'create' ? 'new-password' : 'current-password'"
+        />
+        <img
+          @click="showPassword = !showPassword"
+          :style="{
+            position: 'absolute',
+            right: '12px',
+            cursor: 'pointer',
+            width: '20px',
+          }"
+          src="/assets/img/eye-alt.svg"
+        />
+      </flex-block>
+      <template x-if="state === 'recover'">
+        <flex-block :style="{ width: '100%' }">
+          <input
+            x-show="state !== 'reset'"
+            x-model="confirmPassword"
+            :type="showPasswordConfirm ? 'text' : 'password'"
+            placeholder="Confirm Password"
+            autocomplete="new-password"
+          />
+          <img
+            @click="showPasswordConfirm = !showPasswordConfirm"
+            :style="{
+              position: 'absolute',
+              right: '12px',
+              cursor: 'pointer',
+              width: '20px',
+            }"
+            src="/assets/img/eye-alt.svg"
+          />
+        </flex-block>
+      </template>
+      <flex-block :style="{ width: '100%', flexDirection: 'column' }">
+        <button
+          class="login-button"
+          @click="onClick"
+          x-text="state === 'recover' ? 'Update Password' : state === 'reset' ? 'Reset Password' : state === 'create' ? 'Get Started' : 'Login'"
+        ></button>
+        <div class="messages">
+          <div class="error" x-text="errorMessage"></div>
+          <div class="success" x-text="successMessage"></div>
+        </div>
+        <div :style="{ marginTop: '8px'}">
+          <template x-if="state !== 'create'">
+            <div :style="{ textAlign: 'center' }">
+              Don't have an account?
+              <br />
+              <span @click="state = 'create'">Get started</span>
+              or
+              <span @click="state = 'reset'">Reset your password</span>
+            </div>
+          </template>
+          <template x-if="state === 'create'">
+            <div>
+              Have an account already?
+              <span @click="state = 'login'">Login</span>
+            </div>
+          </template>
+        </div>
+      </flex-block>
+    </div>
+  </div>
+
+  <nav>
+    <button
+      class="nav-about-button"
+      @click="showAbout = true; lockScroll($refs.aboutModal);"
+    >
+      About
+    </button>
+    <button
+      class="nav-login-button"
+      @click="showLogin = true; lockScroll($refs.loginModal);"
+    >
+      Start building
+    </button>
+  </nav>
+
+  <home-page-block></home-page-block>
+  <br /><br />
+  <button
+    class="nav-login-button"
+    @click="showLogin = true; lockScroll($refs.loginModal);"
+  >
+    Start building
+  </button>
+</div>
+
+<script type="module">
+  import {
+    enableBodyScroll,
+    disableBodyScroll,
+  } from "https://esm.sh/body-scroll-lock@4.0.0-beta.0"
+  import { createClient } from "https://esm.sh/@supabase/supabase-js@2.94.1"
+
+  const supabase = createClient(
+    "https://ifteoortevgzwvlbkjev.supabase.co",
+    "sb_publishable_HVSLUqC4MdXCJzTbbJR24w_ylDOODOF",
+  )
+
+  export default {
+    mixins: [],
+    showLogin: false,
+    showAbout: false,
+    state: "login", // login | reset | create | recover
+    params: null,
+    errorMessage: "",
+    successMessage: "",
+    showPassword: false,
+    showPasswordConfirm: false,
+    email: "",
+    password: "",
+    confirmPassword: "",
+    lockScroll: disableBodyScroll,
+    unlockScroll: enableBodyScroll,
+    async init() {
+      if (
+        location.hash.includes("access_token") ||
+        location.hash.includes("error")
+      ) {
+        this.params = new URLSearchParams(location.hash.slice(1))
+
+        if (this.params.get("error_description")) {
+          this.errorMessage = this.params.get("error_description")
+        }
+        if (this.params.get("type") === "recovery") {
+          this.state = "recover"
+
+          const { data, error } = await supabase.auth.setSession({
+            access_token: this.params.get("access_token"),
+            refresh_token: this.params.get("refresh_token"),
+          })
+
+          if (error) {
+            this.errorMessage = "Something went wrong."
+            this.state = "reset"
+          }
+        } else if (this.params.get("type") === "signup") {
+          this.successMessage = "Validated email! You may now login"
+        }
+      }
+    },
+    async localLogin() {
+      const user = localStorage.getItem("user")
+
+      if (!user) {
+        const userHandle = await repo.create({
+          worlds: [],
+        })
+
+        localStorage.setItem("user", userHandle.documentId)
+      }
+
+      await fetch("/api/auth/set-session", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: "local",
+          refresh_token: "local",
+          expires_at: "local", // unix seconds
+        }),
+      })
+
+      setTimeout(() => {
+        window.location.href = "worlds.html"
+      }, 1000)
+    },
+    onClick() {
+      if (this.state === "recover") {
+        this.updatePassword()
+      } else if (this.state === "reset") {
+        this.reset()
+      } else if (this.state === "create") {
+        this.signUp()
+      } else {
+        this.signIn()
+      }
+    },
+    async reset() {
+      this.errorMessage = ""
+      this.successMessage = ""
+
+      const { data, error } = await supabase.auth.resetPasswordForEmail(
+        this.email,
+        {
+          redirectTo: location.origin,
+        },
+      )
+
+      if (error) {
+        this.errorMessage = error.message
+      } else {
+        this.successMessage = "Check your email"
+      }
+    },
+    async signIn() {
+      this.errorMessage = ""
+      this.successMessage = ""
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: this.email,
+        password: this.password,
+      })
+
+      if (error) {
+        this.errorMessage = error.message
+      }
+
+      // Authenticate with Playground
+      this.setToken(data)
+    },
+    async signUp() {
+      this.errorMessage = ""
+      this.successMessage = ""
+
+      const { data, error } = await supabase.auth.signUp({
+        email: this.email,
+        password: this.password,
+        options: {
+          emailRedirectTo: location.origin,
+        },
+      })
+
+      if (error) {
+        this.errorMessage = error.message
+      } else {
+        this.successMessage = "Success! Check your email"
+      }
+    },
+    async updatePassword() {
+      this.errorMessage = ""
+      this.successMessage = ""
+
+      if (this.password !== this.confirmPassword) {
+        this.errorMessage = "Password don't match"
+        return
+      }
+
+      const { data, error } = await supabase.auth.updateUser({
+        password: this.password,
+      })
+
+      if (error) {
+        this.errorMessage = error.message
+        return
+      } else {
+        this.successMessage = "Success! You may now login"
+      }
+
+      this.state = "login"
+    },
+    async setToken(data) {
+      await fetch("/api/auth/set-session", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+          expires_at: data.session.expires_at, // unix seconds
+        }),
+      })
+
+      window.location.href = "worlds.html"
+    },
+  }
+</script>
+
+<style>
+  .wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    position: relative;
+    background: #efefef;
+
+    width: 100%;
+    height: 100%;
+
+    padding-bottom: 240px;
+  }
+
+  nav {
+    padding: 12px;
+    display: flex;
+    justify-content: flex-end;
+    align-self: stretch;
+  }
+
+  .nav-about-button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: white;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 1.2rem;
+    letter-spacing: 0.05rem;
+    margin-right: 12px;
+  }
+
+  .nav-login-button:hover {
+    opacity: 0.8;
+  }
+
+  .nav-login-button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    color: white;
+    background: #7289da;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-size: 1.2rem;
+    letter-spacing: 0.05rem;
+  }
+
+  .nav-login-button:hover {
+    opacity: 0.8;
+  }
+
+  .overlay {
+    z-index: 1;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  input {
+    font-family: inherit;
+    font-size: 1.2rem !important;
+  }
+
+  .messages {
+    margin-top: 4px;
+    position: relative;
+    height: 32px;
+    line-height: 1;
+  }
+
+  .error {
+    position: absolute;
+    color: #f94b5a;
+    font-size: 1.25rem !important;
+  }
+
+  .success {
+    position: absolute;
+    color: #2cbf5e;
+    font-size: 1.25rem !important;
+  }
+
+  h1 {
+    margin: 0;
+  }
+
+  .logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .card-login {
+    max-width: 320px;
+    margin-top: -200px;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: white;
+    border-radius: 4px;
+    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+    padding: 24px;
+    font-size: 1rem;
+  }
+
+  .card div,
+  .card span {
+    font-size: 1.125rem;
+  }
+
+  input {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+    padding: 4px 8px;
+  }
+
+  .login-button {
+    cursor: pointer;
+    color: white;
+    width: 100%;
+    border: 0;
+    border-radius: 4px;
+    padding: 8px 0;
+    font-size: 1.25rem !important;
+    font-family: inherit;
+    background: #f5f6fa;
+    color: black;
+
+    border: 1px solid #bfc9d8;
+    border-radius: 4px;
+  }
+
+  .login-button:active {
+    opacity: 0.9;
+  }
+
+  span {
+    color: #708ad8;
+    cursor: pointer;
+  }
+
+  .divider {
+    width: calc(100% - 40px);
+    border-top: 0.5px solid #eee;
+  }
+
+  .local-btn {
+    border-radius: 4px;
+    border: none;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    background: var(--blue);
+    padding: 12px 0;
+    width: 100%;
+    font-size: 1.2rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+    color: white;
+  }
+  .local-btn:active {
+    background: #e0e0e0;
+  }
+  .local-desc {
+    font-size: 0.95rem;
+    color: #888;
+    margin-top: 2px;
+    margin-bottom: 2px;
+    text-align: center;
+  }
+
+  @media (max-width: 1024px) {
+    .card {
+      margin-top: 0;
+    }
+  }
+</style>

@@ -1,0 +1,250 @@
+<div @peer-heartbeat.window="heartbeat" @resize.window="width = window.innerWidth" class="wrapper">
+  <div class="square white" :class="{ active: spotlightOpen }" @click.stop="spotlightOpen = !spotlightOpen">
+    <img src="/assets/img/favicon.svg">
+  </div>
+
+  <div id="spotlight" x-show="spotlightOpen" class="spotlight" @click.outside="if ($event.target.tagName !== 'NAVBAR-BLOCK') {
+    spotlightOpen = false
+  }">
+    <div class="search">
+      <img src="/assets/img/search.svg"><input :style="{ fontFamily: 'inherit' }" x-effect="spotlightOpen && $nextTick(() => $el.focus())" autofocus="true" x-model="search">
+    </div>
+    <flex-block :style="{ gap: '12px', flexWrap: 'wrap' }">
+      <app-block @click="spotlightOpen = false" pkg="@playground" tag="profile-app" icon="profile" label="Settings"></app-block>
+      <app-block @click="spotlightOpen = false" pkg="@playground" tag="data-app" icon="database" label="Data"></app-block>
+      <app-block @click="spotlightOpen = false" pkg="@playground" tag="library-app" icon="code-slash" label="Library"></app-block>
+      <app-block @click="spotlightOpen = false" pkg="@playground" tag="api-client-app" icon="cloud" label="APIs"></app-block>
+      <app-block @click="spotlightOpen = false" pkg="@playground" tag="devices-app" icon="smartphone" label="Devices"></app-block>
+      <app-block @click="spotlightOpen = false" pkg="@playground" tag="files-app" icon="folder" label="Files"></app-block>
+    </flex-block>
+  </div>
+
+  <template x-teleport="body">
+    <div data-block="navbar-block" @click.outside="themeOpen = false" :style="{ position: 'fixed', top: '12px', right: '52px' }">
+      <button @click="themeOpen = !themeOpen" :style="{ cursor: 'pointer', background: '#222', border: 0, padding: '6px', border: '1px solid rgba(255, 255, 255, 0.5)', borderRadius: '4px' }">
+        <img :style="{ filter: 'invert(1)', width: '22px' }" src="/assets/img/theme.svg">
+      </button>
+      <div x-show="themeOpen" x-transition="" :style="{ textAlign: 'right', color: 'white', position: 'absolute', marginTop: '4px', right: 0 }">
+        <template x-for="bg in ['lotr', 'snow', 'bubble', 'night', 'turf']">
+          <button :style="{
+              marginBottom: '4px',
+              cursor: 'pointer',
+              width: '120px',              background: '#222',
+              color: 'white',
+              borderRadius: '4px',
+              border: '1px solid rgba(255, 255, 255, 0.5)',
+            }" x-text="bg" @click="doc.theme = bg"></button>
+        </template>
+        <div :style="{ lineHeight: 1, marginTop: '4px' }">
+          particles.js<br>vincentgarreau.com
+        </div>
+        <div :style="{ lineHeight: 1, marginTop: '4px' }">
+          LOTR map<br>middleearthmap.app
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template x-teleport="body">
+    <div data-block="navbar-block" @click.outside="fontOpen = false" :style="{ position: 'fixed', top: '12px', right: '92px' }">
+      <button @click="fontOpen = !fontOpen" :style="{ cursor: 'pointer', background: '#222', border: 0, padding: '6px', border: '1px solid rgba(255, 255, 255, 0.5)', borderRadius: '4px' }">
+        <img :style="{ filter: 'invert(1)', width: '22px' }" src="/assets/img/format-text.svg">
+      </button>
+      <div x-show="fontOpen" x-transition="" :style="{ textAlign: 'right', color: 'white', position: 'absolute', marginTop: '4px', right: 0, maxHeight: '400px', overflowY: 'scroll', display: 'flex', flexDirection: 'column', alignItems: 'center' }">
+        <input
+          :value="doc.font"
+          @input="filteredFonts = fonts.filter(f => f.family.toLowerCase().includes($event.target.value.toLowerCase()))"
+          :style="{
+            padding: '4px 8px',
+            width: '140px',
+            marginBottom: '4px'
+          }"
+          placeholder="Search fonts"
+        />
+        <div :style="{ display: 'flex', justifyContent: 'center', marginBottom: '4px' }">
+          <input :style="{ background: '#eee', borderRadius: '4px', border: '0', width: '94px', fontSize: '1.5rem', }" disabled x-model="doc.fontSize" />
+          <button @click="doc.fontSize--">-</button>
+          <button @click="doc.fontSize++">+</button>
+        </div>
+        <template x-for="font in filteredFonts">
+          <button :style="{
+              marginBottom: '4px',
+              cursor: 'pointer',
+              width: '140px',
+              background: '#222',
+              color: 'white',
+              borderRadius: '4px',
+              border: '1px solid rgba(255, 255, 255, 0.5)',
+            }" x-text="font.family" @click="doc.font = font.family"></button>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <template x-teleport="body">
+    <user-block
+      :style="{ position: 'fixed', top: '12px', right: '12px' }"
+      data-block="navbar-block"
+    ></user-block>
+  </template>
+
+  <template x-teleport="body">
+    <data data-block="navbar-block" x-text="numOps" :style="{ color: 'white', position: 'fixed', bottom: '12px', left: '12px', fontFamily: 'monospace', fontSize: '12px' }"></data>
+  </template>
+</div>
+
+<script type="module">
+  export default {
+    mixins: ["@playground/block-mixin"],
+    search: '',
+    themeOpen: false,
+    fontOpen: false,
+    userOpen: false,
+    spotlightOpen: false,
+    user: {},
+    username: '',
+    fonts: [],
+    filteredFonts: [],
+    heartbeats: {},
+    numOps: 0,
+    peers: new Set(["Me"]),
+    width: window.innerWidth,
+    init() {
+      this.doc.fontSize = this.doc.fontSize || 16;
+      this.googleFonts()
+      this.numOps = this.formatStats(handle.doc());
+      
+      handle.on("change", ({ doc }) => (this.numOps = this.formatStats(doc)));
+
+      setInterval(() => {
+        const now = Date.now();
+        for (const [senderId, last] of Object.entries(this.heartbeat)) {
+          if (now - new Date(last).getTime() > 1000 * 3) {
+            const peerName = senderId.split("-")[1];
+            this.peers.delete(peerName);
+            delete this.heartbeat[senderId];
+          }
+        }
+      }, 1000 * 3);
+
+      document.documentElement.style.fontSize = (this.doc.fontSize || 16) + 'px';
+      this.$watch('doc.fontSize', () => {
+        document.documentElement.style.fontSize = this.doc.fontSize + 'px';
+      })
+    },
+    heartbeat(event) {
+      this.peers.add(event.detail.senderId.split("-")[1]);
+      this.heartbeat[event.detail.senderId] = new Date();
+    },
+    formatStats(doc) {
+      const { numOps, numChanges } = Automerge.stats(doc);
+      return `${numOps.toLocaleString()} ops & ${numChanges.toLocaleString()} changes`;
+    },
+    async googleFonts() {
+      const fonts = await fetch('https://www.googleapis.com/webfonts/v1/webfonts?key=AIzaSyBLEIeqUWVDSqhBV1IWqbfKOCWu2TpQnI4')
+        .then(resp => resp.json());
+
+      this.fonts = fonts.items;
+      this.filteredFonts = fonts.items;
+    }
+  };
+</script>
+
+<style>
+  .wrapper {
+    display: flex;
+    align-items: center;
+    z-index: 1000;
+    position: fixed;
+    top: 12px;
+    left: calc(50%);
+    transform: translateX(-50%);
+    transform-origin: top;
+    color: white;
+    font-size: 1.5rem;
+    transition: transform 75ms;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  @media(max-width: 480px) {
+    .wrapper { display: none }
+  }
+
+  .square {
+    position: relative;
+    cursor: pointer;
+    width: 42px;
+    height: 42px;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 4px;
+    background: rgba(25,25,25,0.8);
+
+    transition: all 0.1s ease;
+  }
+
+  .square:last-of-type {
+    border-right: 0.5px solid var(--grey);
+  }
+
+  .square:hover {
+    scale: 0.95;
+  }
+
+  .square.active {
+    background: rgba(25,25,25,0.8);
+  }
+
+  .square:hover label {
+    opacity: 1;
+  }
+
+  .spotlight {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px;
+    border-radius: 4px;
+    background: rgba(25,25,25,0.98);
+    width: 400px;
+  }
+
+  .square img {
+    width: 24px;
+    height: 24px;
+  }
+
+  input {
+    width: 100%;
+    padding: 8px 8px 8px 32px;
+    background: white;
+    color: black;
+    border: none;
+    border-radius: 4px;
+    font-size: 1.125rem;
+    outline: none;
+  }
+
+  .search {
+    position: relative;
+  }
+
+  .search > img {
+    display: block;
+    z-index: 1;
+    pointer-events: none;
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+  }
+</style

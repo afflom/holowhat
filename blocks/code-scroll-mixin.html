@@ -1,0 +1,36 @@
+<script type="module">
+  export default {
+    scroll(event) {
+      const { file, scrollTop } = event.detail
+
+      if (file === this.props.file) {
+        this.silentScroll = true
+        this.scroller.scrollTo({ top: scrollTop })
+      }
+    },
+    setScrollEvent() {
+      this.$nextTick(() => {
+        this.scroller = this.$el.querySelector(".cm-scroller")
+        this.scroller?.addEventListener("scroll", (e) => {
+          if (this.silentScroll) {
+            this.silentScroll = false
+            return
+          }
+          this.$broadcast("code-scrolled", {
+            file: this.props.file,
+            scrollTop: this.scroller.scrollTop,
+          })
+        })
+      })
+    },
+    init() {
+      window.addEventListener("peer-code-scrolled", this.scroll.bind(this))
+
+      this.setScrollEvent()
+
+      this.$watch("props.file", () => {
+        this.setScrollEvent()
+      })
+    },
+  }
+</script>

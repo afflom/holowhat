@@ -1,0 +1,80 @@
+<style>
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  :host {
+    --red: #f15156;
+    --yellow: #ffb400;
+    --light-blue: #48c9b0;
+    --blue: #7289da;
+    --pink: #ff66cc;
+    --purple: #a569bd;
+    --green: #34be5b;
+    --grey: rgba(255, 255, 255, 0.5);
+  }
+  button,
+  input {
+    font-family: inherit;
+  }
+</style>
+
+<script type="module">
+  export default {
+    mixins: ["@playground/coordinates-mixin", "@playground/dblclick-mixin"],
+    async openApp(pkg, tag, props) {
+      const html = document.querySelector(
+        `#${pkg.replace("@", "")}-${tag}`,
+      ).innerHTML
+
+      const screenWidth = window.innerWidth / 2 - 550
+      const screenHeight = window.innerHeight / 2 - 300
+
+      const title =
+        tag
+          .replace(/-block$/, "")
+          .replace(/-app/, "")
+          .replace(/-/g, " ")
+          .replace(/w/g, (c) => c.toUpperCase()) || "App"
+
+      Math.round(screenWidth + this.$world.scrollX)
+
+      props = {
+        x: Math.round(screenWidth + this.$world.scrollX),
+        y: Math.round(screenHeight + this.$world.scrollY),
+        ...props,
+      }
+
+      const withProps = html.replace(
+        ">",
+        " " +
+          Object.entries(props)
+            .map(([k, v]) => `${k}="${v}"`)
+            .join(" ") +
+          " >",
+      )
+
+      const world = document.querySelector("world-block")
+      if (world) {
+        world.insertAdjacentHTML("beforeend", withProps)
+      }
+    },
+    openBlock(tag) {
+      const screenWidth = window.innerWidth / 2 - 550
+      const screenHeight = window.innerHeight / 2 - 300
+
+      const blockHtml = `<${tag} x="${Math.round(
+        screenWidth + this.$world.scrollX,
+      )}" y="${Math.round(screenHeight + this.$world.scrollY)}"></${tag}>`
+
+      const world = document.querySelector("world-block")
+      if (world) {
+        world.insertAdjacentHTML("beforeend", blockHtml)
+      }
+    },
+    openLibrary(pkg, location) {
+      this.openApp("playground", "library-app")
+    },
+  }
+</script>
