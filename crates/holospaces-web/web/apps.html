@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Holo-Apps Shell</title>
+    <title>Holo-Apps WebOS Control Panel</title>
     <link href="/assets/css/reset.css" rel="stylesheet" />
     <link href="/assets/css/apps.css" rel="stylesheet" />
     <link rel="icon" href="/assets/img/globe-alt.svg" sizes="any" type="image/svg+xml" />
@@ -20,7 +20,7 @@
         <div class="dialog glass">
           <h2>Select Cryptographic Identity</h2>
           <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.4;">
-            Holo-apps runs coordinator-free (Part 1). Authorship and authority are defined by self-sovereign keys.
+            Holo-apps runs coordinator-free. Authorship and authority are defined by self-sovereign keys under open standards.
           </p>
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <button class="btn" @click="createNewIdentity()">
@@ -40,17 +40,17 @@
     <template x-if="participant">
       <div class="shell-container">
         
-        <!-- Sidebar Navigation -->
+        <!-- Sidebar Navigation Tree -->
         <div class="sidebar">
           <div class="sidebar-header">
             <div class="logo-glow"></div>
             <img class="logo-img" src="/assets/img/globe-alt.svg" />
-            <div class="sidebar-title">Holo-Apps Shell</div>
+            <div class="sidebar-title">Holo-Apps OS</div>
           </div>
           
           <div class="sidebar-section">
             <!-- App Navigation -->
-            <div class="section-label">Navigation</div>
+            <div class="section-label">System Control Panel</div>
             <ul class="sidebar-list">
               <li class="sidebar-item" :class="{ 'active': activeTab === 'dashboard' }" @click="selectTab('dashboard')">
                 <span>Workspace Dashboard</span>
@@ -60,12 +60,6 @@
               </li>
               <li class="sidebar-item" :class="{ 'active': activeTab === 'contacts' }" @click="activeTab = 'contacts'; activeChannel = null; topBarTitle = 'Contacts & Pools Directory'">
                 <span>Contacts & Pools</span>
-              </li>
-              <li class="sidebar-item" @click="window.location.href = 'login.html'">
-                <span style="display: flex; align-items: center; gap: 8px;">
-                  <img src="/assets/img/favicon.svg" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;" />
-                  Playground 2.0
-                </span>
               </li>
             </ul>
 
@@ -120,22 +114,72 @@
               <h2 style="font-size: 1.2rem; font-weight: 600;" x-text="topBarTitle">Workspace</h2>
             </div>
             
-            <div class="user-badge" @click="showIdentityDetails = true">
+            <div class="user-badge" @click="showIdentityDetails = true" x-show="participant">
               <div class="status-dot"></div>
-              <span class="pubkey-abbr" x-text="'Operator: ' + participant.id.substring(0, 12) + '...'">Address</span>
+              <span class="pubkey-abbr" x-text="'Operator: ' + (participant ? participant.id.substring(0, 12) : '') + '...'">Address</span>
             </div>
           </div>
-          <div class="content-pane" style="overflow-y: auto;">
+          
+          <div class="content-pane">
             
             <!-- Dashboard Tab (Cryptographic Control Plane) -->
             <template x-if="activeTab === 'dashboard'">
-              <div style="display: flex; flex-direction: column; gap: 24px; max-width: 800px; width: 100%;">
+              <div style="display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%;">
                 
+                <h3 style="font-size: 1.25rem; font-weight: 700; color: white; display: block; margin: 0 0 10px 0;">Sovereign Cryptographic Profile</h3>
+                
+                <!-- Open Standards Schema.org System Overview -->
+                <div class="settings-section-card" style="border-left: 4px solid var(--accent);">
+                  <div class="settings-card-header">
+                    <span>🖥️ OS Control Panel & Kernel Overview</span>
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">Schema.org/SoftwareApplication</span>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 0.88rem; line-height: 1.5;">
+                    <div>
+                      <span style="color: var(--text-muted);">Application Name:</span> <strong style="color: white;">Holo-Apps WebOS Control Panel</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--text-muted);">Operating System:</span> <strong style="color: #38bdf8;">Substrate Wasm Peer Kernel (L3)</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--text-muted);">Replication Model:</span> <strong style="color: var(--success);">WebRTC Swarm link / AS2 DAG</strong>
+                    </div>
+                    <div>
+                      <span style="color: var(--text-muted);">State Reduction:</span> <strong style="color: #c084fc;">Deterministic Topological reduction (L1)</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Hardware & Resource Monitors Grid -->
+                <div class="system-widgets-grid">
+                  <div class="widget-card">
+                    <div class="widget-header">Causal Ledger Log Size</div>
+                    <div class="widget-value" x-text="activeWorkspace ? activeWorkspace.collection.events.size + ' events' : 'offline'"></div>
+                    <div class="widget-meter">
+                      <div class="widget-meter-fill" :style="{ width: activeWorkspace ? Math.min(activeWorkspace.collection.events.size * 10, 100) + '%' : '0%' }"></div>
+                    </div>
+                  </div>
+                  <div class="widget-card">
+                    <div class="widget-header">Active Swarm Front Forks</div>
+                    <div class="widget-value" x-text="activeWorkspace ? activeWorkspace.collection.heads.size + ' heads' : 'idle'"></div>
+                    <div class="widget-meter">
+                      <div class="widget-meter-fill" :style="{ width: activeWorkspace ? Math.min(activeWorkspace.collection.heads.size * 33, 100) + '%' : '0%' }" style="background: #10b981;"></div>
+                    </div>
+                  </div>
+                  <div class="widget-card">
+                    <div class="widget-header">WebRTC Swarm Status</div>
+                    <div class="widget-value" style="color: var(--success); font-size: 1.15rem;">CONNECTED (Online)</div>
+                    <div class="widget-meter">
+                      <div class="widget-meter-fill" style="width: 100%; background: var(--success);"></div>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Active Workspace Details -->
                 <template x-if="activeWorkspace">
-                  <div class="glass" style="padding: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px;">
-                      <h3 style="font-size: 1.25rem; font-weight: 700;" x-text="'Workspace: ' + activeWorkspace.name"></h3>
+                  <div class="settings-section-card">
+                    <div class="settings-card-header">
+                      <span x-text="'🗂️ Workspace Manager: ' + activeWorkspace.name"></span>
                       <button class="btn" style="font-size: 0.8rem; padding: 6px 12px;" @click="exportActiveWorkspaceInvite()">
                         Generate Workspace Invite Link/Code
                       </button>
@@ -144,17 +188,17 @@
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                       <div>
                         <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 500;">Workspace Identity Address:</span>
-                        <code style="display: block; font-family: monospace; font-size: 0.8rem; word-break: break-all; background: var(--bg-primary); padding: 8px; border-radius: 4px; color: #38bdf8; margin-top: 4px;" x-text="activeWorkspace.id"></code>
+                        <code style="display: block; font-family: monospace; font-size: 0.8rem; word-break: break-all; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; color: #38bdf8; border: 1px solid var(--border); margin-top: 4px;" x-text="activeWorkspace.id"></code>
                       </div>
                       
                       <!-- Members list -->
-                      <div style="margin-top: 12px;">
+                      <div style="margin-top: 8px;">
                         <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Workspace Member Roster:</span>
                         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
                           <template x-for="mId in activeWorkspace.members" :key="mId">
-                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);">
-                              <span style="font-family: monospace; font-size: 0.85rem;" x-text="mId === participant.id ? 'You (' + mId.substring(0, 16) + '...)' : mId.substring(0, 16) + '...'"></span>
-                              <template x-if="mId !== participant.id">
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.01); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);">
+                              <span style="font-family: monospace; font-size: 0.85rem;" x-text="mId === (participant ? participant.id : '') ? 'You (' + mId.substring(0, 16) + '...)' : mId.substring(0, 16) + '...'"></span>
+                              <template x-if="mId !== (participant ? participant.id : '')">
                                 <div>
                                   <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 2px 8px;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0,6)); alert('Member added to your Default contacts!')">Add to Contacts</button>
                                 </div>
@@ -167,49 +211,37 @@
                   </div>
                 </template>
 
-                <!-- Profile Header Card -->
-                <div class="glass" style="padding: 24px; display: flex; align-items: center; gap: 20px;">
-                  <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold; color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);" x-text="participant.id.substring(0, 2).toUpperCase()">
-                  </div>
-                  <div>
-                    <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 4px;">Sovereign Cryptographic Profile</h3>
-                    <p style="color: var(--text-secondary); font-size: 0.85rem;">
-                      Self-sovereign participant credential initialized under P-256 standard curves.
-                    </p>
-                  </div>
-                </div>
-
                 <!-- Keys and Configuration Card -->
-                <div class="glass" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
-                  <h4 style="font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Public Key Axes</h4>
+                <div class="settings-section-card">
+                  <div class="settings-card-header">🛡️ Cryptographic Key Ring</div>
                   <div style="display: flex; flex-direction: column; gap: 16px; font-family: 'Source Code Pro', monospace; font-size: 0.85rem;">
                     <div>
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="color: var(--text-muted); font-weight: 500;">Signing Identity (κ):</span>
+                        <span style="color: var(--text-muted); font-weight: 500;">Signing Identity (SignatureAxis / κ):</span>
                         <span style="font-size: 0.75rem; background: rgba(99, 102, 241, 0.1); color: #818cf8; padding: 2px 8px; border-radius: 20px;">ECDSA P-256</span>
                       </div>
-                      <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-primary); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
-                        <div style="overflow-x: auto; word-break: break-all; flex-grow: 1;" x-text="participant.id"></div>
-                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant.id); alert('Copied Public Key')">Copy</button>
+                      <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+                        <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #38bdf8;" x-text="participant ? participant.id : ''"></div>
+                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.id : ''); alert('Copied Public Key')">Copy</button>
                       </div>
                     </div>
                     <div>
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="color: var(--text-muted); font-weight: 500;">Exchange Public Key:</span>
+                        <span style="color: var(--text-muted); font-weight: 500;">Exchange Public Key (CurveAxis / ECDH):</span>
                         <span style="font-size: 0.75rem; background: rgba(168, 85, 247, 0.1); color: #c084fc; padding: 2px 8px; border-radius: 20px;">ECDH P-256</span>
                       </div>
-                      <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-primary); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
-                        <div style="overflow-x: auto; word-break: break-all; flex-grow: 1;" x-text="participant.curveId"></div>
-                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant.curveId); alert('Copied Exchange Key')">Copy</button>
+                      <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+                        <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #c084fc;" x-text="participant ? participant.curveId : ''"></div>
+                        <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.curveId : ''); alert('Copied Exchange Key')">Copy</button>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <!-- Key Custody Card -->
-                <div class="glass" style="padding: 24px;">
-                  <h4 style="font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 16px;">Key Custody & Recovery</h4>
-                  <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin-bottom: 16px;">
+                <div class="settings-section-card">
+                  <div class="settings-card-header">🔑 Identity Backup & Custody</div>
+                  <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5;">
                     Your private keys are held locally in your browser's secure context. No coordinator can recover them if lost. Export a backup payload to persist custody across devices.
                   </p>
                   <div style="display: flex; gap: 12px;">
@@ -222,22 +254,28 @@
                   </div>
                 </div>
 
-                <!-- Peer Status Details -->
-                <div class="glass" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
-                  <h4 style="font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 4px;">Substrate Peer Node</h4>
-                  <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.85rem; color: var(--text-secondary);">
-                    <div style="display: flex; justify-content: space-between;">
-                      <span>Connection Status:</span>
-                      <span style="color: var(--success); font-weight: 600;">Active (online)</span>
+                <!-- Live Causal Event Stream (JSON-LD Terminal Console) -->
+                <div class="terminal-box">
+                  <div class="terminal-header">
+                    <div class="terminal-dots">
+                      <div class="terminal-dot close"></div>
+                      <div class="terminal-dot minimize"></div>
+                      <div class="terminal-dot expand"></div>
                     </div>
-                    <div style="display: flex; justify-content: space-between;">
-                      <span>Causal Event Propagation:</span>
-                      <span>WebRTC Swarm Link</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between;">
-                      <span>My Workspace Orgs (AS2 Group):</span>
-                      <span style="color: white; font-weight: 600;" x-text="workspaces.length">0</span>
-                    </div>
+                    <span>causal-ledger@webos: /dev/substrate</span>
+                    <span style="font-size: 0.68rem; color: #10b981;">● active</span>
+                  </div>
+                  <div class="terminal-body">
+                    <div class="terminal-line"><span class="terminal-prompt">[holo-apps-kernel]</span> initializing WebOS Control Panel terminal monitor...</div>
+                    <div class="terminal-line"><span class="terminal-prompt">[holo-apps-kernel]</span> loading decentralized ActivityStreams event logs...</div>
+                    
+                    <template x-if="!activeWorkspace || rawEventStream.length === 0">
+                      <div class="terminal-line" style="color: var(--text-muted);">No transaction logs recorded. Select a Workspace to display ActivityStreams JSON-LD stream.</div>
+                    </template>
+                    
+                    <template x-for="jsonStr in rawEventStream" :key="jsonStr">
+                      <pre style="color: #a855f7; margin-bottom: 12px; font-size: 0.78rem;" x-text="jsonStr"></pre>
+                    </template>
                   </div>
                 </div>
 
@@ -248,6 +286,17 @@
             <template x-if="activeTab === 'apps'">
               <div>
                 <h3 style="font-weight: 600; margin-bottom: 16px;">Gateway App Index</h3>
+                
+                <!-- FreeDesktop.org Desktop Entry Metadata Card -->
+                <div class="settings-section-card" style="margin-bottom: 20px;">
+                  <div class="settings-card-header">
+                    <span>📁 FreeDesktop.org App Launch Manifests</span>
+                  </div>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                    Applications compiled in this sandboxed environment run as standard client-side custom blocks. Their configurations implement the standard FreeDesktop.org application registry specifications (INI type descriptors).
+                  </p>
+                </div>
+
                 <div class="apps-grid">
                   <template x-for="app in indexApps" :key="app.id">
                     <div class="app-card glass">
@@ -275,10 +324,11 @@
             <!-- Contacts & Pools Tab -->
             <template x-if="activeTab === 'contacts'">
               <div style="display: flex; gap: 24px; width: 100%; height: 100%;">
+                
                 <!-- Left Pools Selector Pane -->
-                <div class="glass" style="width: 240px; padding: 16px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px;">
+                <div class="glass" style="width: 250px; padding: 20px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h4 style="font-weight: 600; font-size: 0.9rem; text-transform: uppercase; color: var(--text-secondary);">Contact Pools</h4>
+                    <h4 style="font-weight: 700; font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary);">Contact Pools</h4>
                     <button class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.8rem;" @click="showCreatePoolModal = true">+</button>
                   </div>
                   
@@ -309,21 +359,21 @@
                 <!-- Right Directory Contacts list -->
                 <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 16px;">
                   <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="font-size: 1.2rem; font-weight: 700;">Contacts Directory</h3>
+                    <h3 style="font-size: 1.25rem; font-weight: 700;">Contacts Directory (ActivityStreams Person)</h3>
                     <button class="btn" @click="showAddContactModal = true">+ Add Contact Manually</button>
                   </div>
                   
-                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div class="contact-card-grid">
                     <template x-for="c in contacts.filter(c => selectedPoolId === 'all' || c.pools?.includes(selectedPoolId))" :key="c.id">
-                      <div class="glass" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; border-color: rgba(255,255,255,0.05);">
+                      <div class="contact-card glass">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                           <div>
-                            <div style="font-weight: 600; font-size: 1.05rem;" x-text="c.name">Contact Alias</div>
-                            <div style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;" x-text="'κ: ' + c.id"></div>
-                            <div style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" x-text="'ECDH: ' + c.curveId"></div>
+                            <div style="font-weight: 700; font-size: 1.1rem; color: white;" x-text="c.name">Contact Alias</div>
+                            <div style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;" x-text="'κ: ' + c.id.substring(0, 24) + '...'"></div>
+                            <div style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;" x-text="'ECDH: ' + c.curveId.substring(0, 24) + '...'"></div>
                           </div>
                           
-                          <template x-if="c.id !== participant.id">
+                          <template x-if="c.id !== (participant ? participant.id : '')">
                             <button class="btn btn-secondary" style="background: var(--error); border: none; padding: 4px 10px; font-size: 0.8rem;" @click="deleteContact(c.id)">Delete</button>
                           </template>
                         </div>
@@ -363,6 +413,28 @@
           </div>
         </div>
 
+      </div>
+    </template>
+
+    <!-- OS bottom launcher dock -->
+    <template x-if="participant">
+      <div class="os-dock">
+        <div class="os-dock-item" :class="{ 'active': activeTab === 'dashboard' }" @click="selectTab('dashboard')" title="OS Control Panel">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+          <span>System</span>
+        </div>
+        <div class="os-dock-item" :class="{ 'active': activeTab === 'apps' }" @click="selectTab('apps')" title="App Store">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          <span>Apps</span>
+        </div>
+        <div class="os-dock-item" :class="{ 'active': activeTab === 'contacts' }" @click="activeTab = 'contacts'; activeChannel = null; topBarTitle = 'Contacts & Pools Directory'" title="Contacts Directory">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          <span>Contacts</span>
+        </div>
+        <div class="os-dock-item" @click="window.location.href = 'login.html'" title="Playground 2.0 Canvas">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span>Playground</span>
+        </div>
       </div>
     </template>
 
@@ -483,7 +555,7 @@
           <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 12px;">
             <div>
               <span style="font-weight: 600; font-size: 0.85rem;">Identity Hex Key:</span>
-              <div style="font-family: 'Source Code Pro', monospace; background: var(--bg-primary); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem; word-break: break-all;" x-text="participant.id"></div>
+              <div style="font-family: 'Source Code Pro', monospace; background: rgba(0,0,0,0.4); padding: 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.8rem; word-break: break-all;" x-text="participant ? participant.id : ''"></div>
             </div>
             <button class="btn btn-secondary" @click="exportIdentity()">Export Identity Payload</button>
             <button class="btn btn-secondary" style="background: var(--error);" @click="clearIdentity()">Wipe Session Keys</button>

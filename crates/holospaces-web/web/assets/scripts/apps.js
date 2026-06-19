@@ -44,6 +44,24 @@ export function workspaceReducer(events) {
 
 Alpine.data("shell", () => {
   return {
+    get rawEventStream() {
+      if (!this.activeWorkspace) return [];
+      const col = this.activeWorkspace.collection;
+      if (!col) return [];
+      return Array.from(col.events.values())
+        .sort((a, b) => b.header.clock - a.header.clock)
+        .map(ev => {
+          const payload = ev.body.cleartext || ev.decodedPayload || {};
+          return JSON.stringify({
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id": `urn:uuid:${ev.id}`,
+            "type": ev.header.kind === "genesis" ? "Group" : (payload.type || "Activity"),
+            "actor": `did:key:${ev.header.author}`,
+            "object": payload.object || payload,
+            "header": ev.header
+          }, null, 2);
+        });
+    },
     participant: null,
     activeTab: "dashboard", // "dashboard", "apps", "channel", "contacts"
     installedAppIds: [],
@@ -616,6 +634,16 @@ Alpine.data("shell", () => {
           const gData = payload.genesisEvent;
           const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
           
+          if (this.workspaces.some(w => w.id === genesis.id)) {
+            const existing = this.workspaces.find(w => w.id === genesis.id);
+            this.activeWorkspace = existing;
+            this.channels = existing.channels;
+            this.inviteCodeInput = "";
+            this.showJoinWorkspaceModal = false;
+            alert("Joined workspace successfully!");
+            return;
+          }
+          
           const col = new Collection(genesis.id, workspaceReducer);
           await col.addEvent(genesis);
           this.saveEventToStorage(genesis);
@@ -677,10 +705,17 @@ Alpine.data("shell", () => {
     saveEventToStorage(event) {
       localStorage.setItem(`holoapps_event:${event.id}`, JSON.stringify(event));
       const colId = event.header.collection;
-      const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${colId}`) || "[]");
-      if (!eventIds.includes(event.id)) {
-        eventIds.push(event.id);
-        localStorage.setItem(`holoapps_col_events:${colId}`, JSON.stringify(eventIds));
+      const idsToSave = [colId];
+      if (event.header.kind === "genesis" || event.header.collection === event.id) {
+        idsToSave.push(event.id);
+      }
+      for (const cid of idsToSave) {
+        if (!cid) continue;
+        const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${cid}`) || "[]");
+        if (!eventIds.includes(event.id)) {
+          eventIds.push(event.id);
+          localStorage.setItem(`holoapps_col_events:${cid}`, JSON.stringify(eventIds));
+        }
       }
     },
 
@@ -766,7 +801,6 @@ Alpine.data("shell", () => {
         localStorage.removeItem("holoapps_participant_jwk");
         localStorage.removeItem("holoapps_identity_key");
         localStorage.removeItem("holoapps_curve_key");
-        this.participant = null;
         window.location.reload();
       }
     }
