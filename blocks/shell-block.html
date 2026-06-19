@@ -210,25 +210,29 @@
   const { Participant, Event, Collection, App, canonicalJson, sha256, HoloAppsCrypto, base64Encode, base64Decode } = await import(`${origin}${base}/assets/scripts/holo-apps.js`);
   const { messengerReducer, createMessengerApp } = await import(`${origin}${base}/assets/scripts/holo-messenger.js`);
 
-  export function workspaceReducer(state = { name: "", channels: [], members: [] }, event) {
-    const payload = event.body.payload || {};
-    const type = payload.type || "";
-    const eventKind = event.header.kind;
-    
-    if (eventKind === "genesis" || type === "Group") {
-      state.name = payload.name || "Unnamed Workspace";
-      state.channels = payload.channels || [];
-      state.members = payload.members || [event.header.author];
-    } else if (eventKind === "add-channel" || (type === "Add" && payload.object?.type === "Conversation")) {
-      const chId = payload.object?.id || payload.id;
-      const chName = payload.object?.name || payload.name;
-      if (chId && !state.channels.some(c => c.id === chId)) {
-        state.channels.push({ id: chId, name: chName });
-      }
-    } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person")) {
-      const memberId = payload.object?.id || payload.id;
-      if (memberId && !state.members.includes(memberId)) {
-        state.members.push(memberId);
+  export function workspaceReducer(events) {
+    const state = { name: "", channels: [], members: [] };
+    for (const ev of events) {
+      const payload = ev.payload || (ev.body ? ev.body.payload : {}) || {};
+      const type = payload.type || "";
+      const eventKind = ev.kind || (ev.header ? ev.header.kind : "");
+      const author = ev.author || (ev.header ? ev.header.author : "");
+      
+      if (eventKind === "genesis" || type === "Group") {
+        state.name = payload.name || "Unnamed Workspace";
+        state.channels = payload.channels || [];
+        state.members = payload.members || [author];
+      } else if (eventKind === "add-channel" || (type === "Add" && payload.object?.type === "Conversation")) {
+        const chId = payload.object?.id || payload.id;
+        const chName = payload.object?.name || payload.name;
+        if (chId && !state.channels.some(c => c.id === chId)) {
+          state.channels.push({ id: chId, name: chName });
+        }
+      } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person")) {
+        const memberId = payload.object?.id || payload.id;
+        if (memberId && !state.members.includes(memberId)) {
+          state.members.push(memberId);
+        }
       }
     }
     return state;

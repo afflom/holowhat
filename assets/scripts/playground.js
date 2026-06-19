@@ -155,6 +155,40 @@ const repo = new Repo({
 window.repo = repo
 window.handle = null
 
+// Support for creating WebRTC Content Sync Connection inside the app UI
+window.connectPeerLink = async (isInitiator, targetSdp) => {
+  cnLink = new WebRtcLink(isInitiator);
+  window.cnLink = cnLink;
+  if (isInitiator) {
+    const sdp = await cnLink.create_offer();
+    return sdp;
+  } else {
+    const answer = await cnLink.accept_offer(targetSdp);
+    return answer;
+  }
+};
+
+window.acceptPeerAnswer = async (answerSdp) => {
+  if (cnLink) {
+    await cnLink.accept_answer(answerSdp);
+  }
+};
+
+window.exchangeIce = async (iceLines) => {
+  if (cnLink) {
+    for (const line of iceLines.split("\n")) {
+      const candidate = line.trim();
+      if (candidate) {
+        try {
+          await cnLink.add_ice(candidate);
+        } catch(e) {
+          console.error(e);
+        }
+      }
+    }
+  }
+};
+
 // 5. Global Mock API to handle Worlds and Session requests in-browser
 const originalFetch = window.fetch;
 window.fetch = async function (url, options) {
@@ -315,33 +349,26 @@ if (docUrl === "2RsvqRvmUqCmxPhEbdXtwW4qsdFm" || !docUrl || docUrl === "2RsvqRvm
   docUrl = localDefault || "2RsvqRvmUqCmxPhEbdXtwW4qsdFm";
 }
 
-async function findWithBackoff(id, maxRetries = 3, delay = 300) {
+async function findWithBackoff(id, maxRetries = 100, delay = 500) {
   let attempt = 0
   while (attempt <= maxRetries) {
     try {
       return await repo.find(id)
     } catch (e) {
-      console.log("Find error:", e)
-      await new Promise((res) => setTimeout(res, delay * Math.pow(2, attempt)))
+      console.log("Find error for " + id + ":", e)
+      await new Promise((res) => setTimeout(res, delay * Math.pow(2, Math.min(attempt, 5))))
     }
     attempt++
   }
   throw new Error(`Failed to find document with id: ${id}`)
 }
 
-handle = await findWithBackoff(docUrl)
-handle.change(doc => {
-  if (!doc.world) {
-    doc.world = [];
-  }
-});
-window.handle = handle
-
 window.throttledQueue = []
 window.throttledTimer = null
 
 window.throttledTick = function () {
   window.throttledTimer = null
+  if (!handle) return
   if (!window.throttledQueue.length) return
   const batch = window.throttledQueue
   window.throttledQueue = []
@@ -371,6 +398,7 @@ function createObserved(doc) {
   return new Observer(
     structuredClone(doc),
     (evt) => {
+      if (!handle) return
       if (window.lock === true) {
         window.lock = false
         return
@@ -390,12 +418,6 @@ function createObserved(doc) {
     { ignoreSameValueReassign: true },
   )
 }
-
-handle.on("change", (evt) => {
-  if (!window.lock) {
-    Alpine.$data(document.body).doc = createObserved(evt.doc)
-  }
-})
 
 Alpine.magic("id", (el) => {
   let host = el.getRootNode().host
@@ -422,7 +444,6 @@ Alpine.magic("host", (el) => {
 
 Alpine.magic("broadcast", () => (type, data) => {
   if (cnLink && cnLink.is_open()) {
-    // Announce current state's kappa
     try {
       const kappa = localStorage.getItem("hs-doc-kappa:" + docUrl);
       if (kappa) {
@@ -452,7 +473,7 @@ function setByPath(obj, path, value) {
 
 Alpine.data("playground", () => {
   return {
-    doc: createObserved(handle.doc()),
+    doc: handle ? createObserved(handle.doc()) : { world: [], theme: "night", font: "Nanum Pen Script" },
     init() {
       // Periodic content network pump (symmetric peer transmission over WebRTC data channel)
       setInterval(() => {
@@ -482,18 +503,33 @@ Alpine.data("playground", () => {
                   await new Promise(res => setTimeout(res, 50));
                 }
                 if (resolvedBytes) {
-                  // Merge loaded bytes into the current document
-                  const remoteDoc = Automerge.load(new Uint8Array(resolvedBytes));
-                  handle.change(doc => {
-                    Automerge.merge(doc, remoteDoc);
-                  });
-                  console.log("Synced remote changes successfully!");
+                  const dataArray = Array.from(resolvedBytes);
+                  const dataJson = JSON.stringify(dataArray);
+                  localStorage.setItem("hs-doc-data:" + kappa, dataJson);
+                  localStorage.setItem("hs-doc-data:document/" + docUrl, dataJson);
+                  localStorage.setItem("hs-doc-data:" + docUrl + "/snapshot/bootstrap", dataJson);
+                  localStorage.setItem("hs-doc-kappa:document/" + docUrl, kappa);
+                  localStorage.setItem("hs-doc-kappa:" + docUrl, kappa);
+                  
+                  if (handle) {
+                    try {
+                      const remoteDoc = Automerge.load(new Uint8Array(resolvedBytes));
+                      handle.change(doc => {
+                        Automerge.merge(doc, remoteDoc);
+                      });
+                      console.log("Synced remote changes successfully!");
+                    } catch (e) {
+                      console.error("Failed to merge remote document:", e);
+                    }
+                  } else {
+                    console.log("Downloaded document bytes. Storage populated for docUrl:", docUrl);
+                  }
                 }
               }
             }
           }
         }
-      }, 3000);
+      }, 1000);
     },
   }
 })
@@ -512,76 +548,89 @@ function defineBlock(pkg, tagName, template) {
   }
 }
 
-const pkgs = Array.from(
-  new Set(["3JmVZBuZJrg6HK6kr9m9KRuZebxA", ...(handle.doc()?.packages || [])]),
-)
+async function loadPackagesAndBlocks(doc) {
+  const pkgs = Array.from(
+    new Set(["3JmVZBuZJrg6HK6kr9m9KRuZebxA", ...(doc?.packages || [])]),
+  )
 
-const blockTemplates = []
+  const blockTemplates = []
 
-for (let pkg of pkgs) {
-  let pkgHandle = await findWithBackoff(pkg)
-  const pkgDoc = pkgHandle.doc()
+  for (let pkg of pkgs) {
+    let pkgHandle = await findWithBackoff(pkg)
+    const pkgDoc = pkgHandle.doc()
 
-  const files = Object.entries(pkgDoc)
+    const files = Object.entries(pkgDoc)
 
-  for (let [name, source] of files) {
-    if (name === "name" || name === "packages") continue;
-    const template = document.createElement("template")
-    template.id = `${pkgDoc.name}-${name}`
-    template.innerHTML = source
-    document.body.appendChild(template)
+    for (let [name, source] of files) {
+      if (name === "name" || name === "packages") continue;
+      const template = document.createElement("template")
+      template.id = `${pkgDoc.name}-${name}`
+      template.innerHTML = source
+      document.body.appendChild(template)
 
-    if (name.split("-").pop() === "block" || name.split("-").pop() === "cell") {
-      blockTemplates.push({
-        pkg: pkgDoc.name,
-        name: name,
-        template,
-      })
-    }
-  }
-}
-
-for (let block of blockTemplates) {
-  defineBlock(block.pkg, block.name, block.template)
-}
-
-// Support for creating WebRTC Content Sync Connection inside the app UI
-window.connectPeerLink = async (isInitiator, targetSdp) => {
-  cnLink = new WebRtcLink(isInitiator);
-  window.cnLink = cnLink;
-  if (isInitiator) {
-    const sdp = await cnLink.create_offer();
-    return sdp;
-  } else {
-    const answer = await cnLink.accept_offer(targetSdp);
-    return answer;
-  }
-};
-
-window.acceptPeerAnswer = async (answerSdp) => {
-  if (cnLink) {
-    await cnLink.accept_answer(answerSdp);
-  }
-};
-
-window.exchangeIce = async (iceLines) => {
-  if (cnLink) {
-    for (const line of iceLines.split("\n")) {
-      const candidate = line.trim();
-      if (candidate) {
-        try {
-          await cnLink.add_ice(candidate);
-        } catch(e) {
-          console.error(e);
-        }
+      if (name.split("-").pop() === "block" || name.split("-").pop() === "cell") {
+        blockTemplates.push({
+          pkg: pkgDoc.name,
+          name: name,
+          template,
+        })
       }
     }
   }
-};
 
-// Remove page loader
-const loader = document.getElementById("page-loader")
-if (loader) {
-  loader.style.opacity = "0"
-  setTimeout(() => loader.remove(), 300)
+  for (let block of blockTemplates) {
+    defineBlock(block.pkg, block.name, block.template)
+  }
+
+  // Remove page loader
+  const loader = document.getElementById("page-loader")
+  if (loader) {
+    loader.style.opacity = "0"
+    setTimeout(() => loader.remove(), 300)
+  }
 }
+
+async function loadDocument() {
+  try {
+    handle = await findWithBackoff(docUrl);
+    handle.change(doc => {
+      if (!doc.world) {
+        doc.world = [];
+      }
+    });
+    window.handle = handle;
+    
+    // Set up change handler
+    handle.on("change", (evt) => {
+      if (!window.lock) {
+        try {
+          Alpine.$data(document.body).doc = createObserved(evt.doc);
+        } catch (e) {}
+      }
+    });
+    
+    // Update Alpine data if Alpine is initialized
+    const appEl = document.body;
+    if (appEl && window.Alpine) {
+      try {
+        const data = Alpine.$data(appEl);
+        if (data) {
+          data.doc = createObserved(handle.doc());
+        }
+      } catch (e) {
+        console.log("Alpine data swap deferred:", e);
+      }
+    }
+    
+    await loadPackagesAndBlocks(handle.doc());
+    
+  } catch (e) {
+    console.error("Failed to load document:", e);
+  }
+}
+
+// Kick off default package loading, then document loading
+(async () => {
+  await loadPackagesAndBlocks({ packages: [] }); // Loads 3JmVZBuZJrg6HK6kr9m9KRuZebxA immediately
+  await loadDocument();
+})();
