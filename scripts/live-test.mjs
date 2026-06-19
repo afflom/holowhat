@@ -127,7 +127,7 @@ async function runLiveTest() {
     await channelNameInput.waitFor({ timeout: 5000 });
     await channelNameInput.fill("E2E Test Channel");
     
-    const submitCreateChBtn = page.locator("button:has-text('Create')");
+    const submitCreateChBtn = page.locator("button", { hasText: /^Create$/ });
     await submitCreateChBtn.click();
     
     // Verify Channel created and listed
