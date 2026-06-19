@@ -11,8 +11,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages-production
@@ -47,19 +45,13 @@ jobs:
           chmod +x scripts/build-site.sh
           ./scripts/build-site.sh
 
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages (Actions Workflow)
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Deploy to the gh-pages root (Legacy Branch compatibility)
+      - name: Deploy to the gh-pages root (production)
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: _site
           branch: gh-pages
           clean: true
-          commit-message: "deploy: Playground 2.0 → gh-pages root (${{ github.sha }})"
+          # Never wipe the per-PR preview deployments living alongside production.
+          clean-exclude: |
+            pr-preview/**
+          commit-message: "deploy: Platform Manager → gh-pages root (${{ github.sha }})"
