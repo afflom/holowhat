@@ -40,15 +40,22 @@ Alpine.data("shell", () => {
           const jwkObj = JSON.parse(savedJwk);
           this.participant = await Participant.importJwk(jwkObj);
           console.log("Existing participant identity loaded:", this.participant.id);
+          await this.onIdentityReady();
         } catch (e) {
-          console.error("Failed to restore identity, generating new one:", e);
-          await this.createNewIdentity();
+          console.error("Failed to restore identity:", e);
         }
-      } else {
-        await this.createNewIdentity();
       }
 
-      // 2. Load gateway app indexes (Discovery is not authority - Part 4)
+      // 5. Active channel poll loop to refresh message projection
+      setInterval(async () => {
+        if (this.activeChannel) {
+          await this.refreshChannelView();
+        }
+      }, 1000);
+    },
+
+    async onIdentityReady() {
+      // 2. Load gateway app indexes
       const mockManifest = await createMessengerApp(this.participant);
       this.indexApps = [mockManifest];
 
@@ -57,13 +64,6 @@ Alpine.data("shell", () => {
 
       // 4. Load joined channels (Collections)
       await this.loadChannels();
-
-      // 5. Active channel poll loop to refresh message projection
-      setInterval(async () => {
-        if (this.activeChannel) {
-          await this.refreshChannelView();
-        }
-      }, 1000);
     },
 
     async createNewIdentity() {
@@ -74,6 +74,7 @@ Alpine.data("shell", () => {
       localStorage.setItem("holoapps_identity_key", p.id);
       localStorage.setItem("holoapps_curve_key", p.curveId);
       console.log("New self-sovereign participant identity created:", p.id);
+      await this.onIdentityReady();
     },
 
     async loadExistingIdentity() {
@@ -86,9 +87,7 @@ Alpine.data("shell", () => {
         localStorage.setItem("holoapps_curve_key", p.curveId);
         this.privateKeyHexInput = "";
         
-        // Reload manifest with new identity
-        const mockManifest = await createMessengerApp(p);
-        this.indexApps = [mockManifest];
+        await this.onIdentityReady();
         
         alert("Identity imported successfully!");
       } catch (e) {
