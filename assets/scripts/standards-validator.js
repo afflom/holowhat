@@ -8,7 +8,7 @@ export class StandardsValidator {
   static asContext = null;
   static schemaContext = null;
 
-  static async init(basePath = "/") {
+  static async init(basePath = "") {
     if (this.asContext && this.schemaContext) return;
     try {
       const asResp = await fetch(`${basePath}assets/schemas/activitystreams-context.json`);
