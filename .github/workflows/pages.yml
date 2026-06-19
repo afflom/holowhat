@@ -65,14 +65,12 @@ jobs:
 
       - name: Install Playwright
         run: |
-          cd crates/holospaces-web/web
           npm install
           npx --yes playwright install --with-deps chromium chromium-headless-shell
 
       - name: Run Playwright E2E test
         run: |
-          cd crates/holospaces-web/web
-          node ../../../scripts/playground-test.mjs
+          node scripts/playground-test.mjs
 
 
 
