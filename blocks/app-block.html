@@ -4,7 +4,7 @@
   @click="openApp(props.pkg, props.tag)"
 >
   <div class="square">
-    <img :src="`/assets/icons/${props.icon}.svg`" />
+    <img :src="`assets/icons/${props.icon}.svg`" />
   </div>
   <template x-if="props.label">
     <label x-text="props.label"></label>
