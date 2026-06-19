@@ -36,7 +36,7 @@ async function runLiveTest() {
     // Capture failed resource requests (e.g. 404, blocked)
     page.on("requestfailed", req => {
       const url = req.url();
-      if (url.includes("afflom.github.io")) {
+      if (url.includes("afflom.github.io") && !url.startsWith("blob:")) {
         console.error(`Live resource request failed: ${url} (${req.failure()?.errorText})`);
         failedRequests.push({ url, error: req.failure()?.errorText });
       }
