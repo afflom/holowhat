@@ -958,9 +958,17 @@ Alpine.data("shell", () => {
         };
 
         const serialized = base64Encode(JSON.stringify(payload));
+        try {
+          navigator.clipboard.writeText(serialized).catch(err => {
+            console.log("Failed to copy to clipboard automatically:", err);
+          });
+        } catch (e) {
+          // Ignore synchronous clipboard API errors
+        }
         prompt("Share this Workspace Invite Code:", serialized);
+        console.log("Generated Workspace Invite Code:\n", serialized);
       } catch (e) {
-        console.error(e);
+        console.error("exportActiveWorkspaceInvite error:", e);
         alert("Failed to export workspace invite.");
       }
     },
@@ -970,6 +978,7 @@ Alpine.data("shell", () => {
       try {
         const decoded = base64Decode(this.inviteCodeInput.trim());
         if (!decoded) {
+          console.error("joinWorkspace error: Failed to decode invite code. Input may be invalid base64 or truncated:", this.inviteCodeInput);
           alert("Failed to join workspace. Invalid workspace invite code.");
           return;
         }
@@ -1033,10 +1042,11 @@ Alpine.data("shell", () => {
           this.showJoinWorkspaceModal = false;
           alert("Joined workspace successfully!");
         } else {
+          console.error("joinWorkspace error: Invalid payload structure or missing required properties:", payload);
           alert("Invalid workspace invite payload.");
         }
       } catch (e) {
-        console.error(e);
+        console.error("joinWorkspace error: Exception caught during processing:", e);
         alert("Failed to join workspace.");
       }
     },
