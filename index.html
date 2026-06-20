@@ -23,6 +23,7 @@
             Sign in to access your workspaces and secure communication channels.
           </p>
           <div style="display: flex; flex-direction: column; gap: 12px;">
+            <input type="text" class="input" placeholder="Display Nickname (e.g. Alice)" x-model="nicknameInput" />
             <button class="btn" @click="createNewIdentity()">
               Create New User Profile
             </button>
@@ -127,6 +128,19 @@
               <div style="display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%;">
                 
                 <h3 style="font-size: 1.25rem; font-weight: 700; color: white; display: block; margin: 0 0 10px 0;">User Account & Security</h3>
+                
+                <!-- User ID Card (Human-Centered) -->
+                <div class="user-id-card">
+                  <svg class="avatar-svg" viewBox="0 0 100 100" x-html="generateAvatarSvg(participant ? participant.id : '')"></svg>
+                  <div class="card-details">
+                    <div class="card-nickname" x-text="localStorage.getItem('holoapps_nickname') || 'Operator'"></div>
+                    <div class="card-holo-id" @click="copyHoloId()" title="Click to copy your unified Holo ID">
+                      <span style="font-weight: 600; color: var(--accent);">Your Holo ID:</span>
+                      <span x-text="getHoloId()" style="opacity: 0.85;"></span>
+                    </div>
+                  </div>
+                  <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px;" @click="showIdentityDetails = true">Config</button>
+                </div>
                 
                 <!-- Open Standards Schema.org System Overview -->
                 <div class="settings-section-card" style="border-left: 4px solid var(--accent);">
@@ -363,6 +377,31 @@
                     <button class="btn" @click="showAddContactModal = true">+ Add Contact Manually</button>
                   </div>
                   
+                  <!-- Online Peers Nearby Discovery section (Human-Centered) -->
+                  <div class="nearby-peers-section">
+                    <h4 style="font-weight: 700; font-size: 0.85rem; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                      <div class="status-dot"></div>
+                      <span>Online Nearby Peers Discovered (Local Swarm)</span>
+                    </h4>
+                    <div class="peer-list" x-show="discoveredPeers.length > 0">
+                      <template x-for="peer in discoveredPeers" :key="peer.id">
+                        <div class="peer-item">
+                          <div class="peer-info">
+                            <svg class="avatar-svg" style="width: 32px; height: 32px;" viewBox="0 0 100 100" x-html="generateAvatarSvg(peer.id)"></svg>
+                            <div>
+                              <strong x-text="peer.name" style="color: white; font-size: 0.9rem;"></strong>
+                              <span style="color: var(--text-muted); font-size: 0.72rem; display: block; font-family: monospace;" x-text="'did:key:' + peer.id.substring(0, 16) + '...'"></span>
+                            </div>
+                          </div>
+                          <button class="btn" style="font-size: 0.75rem; padding: 4px 10px;" @click="addDiscoveredContact(peer)">Add Contact</button>
+                        </div>
+                      </template>
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); padding: 8px 0;" x-show="discoveredPeers.length === 0">
+                      Scanning local swarm link for active peers online...
+                    </div>
+                  </div>
+                  
                   <div class="contact-card-grid">
                     <template x-for="c in contacts.filter(c => selectedPoolId === 'all' || c.pools?.includes(selectedPoolId))" :key="c.id">
                       <div class="contact-card glass">
@@ -463,12 +502,28 @@
           <h2>Join Workspace</h2>
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4;">
-              Paste the invite code shared by a member of the workspace to import its channels.
+              Paste the Workspace Pass code shared by another peer to join.
             </p>
-            <input type="text" class="input" placeholder="Paste Workspace Invite Code" x-model="inviteCodeInput" />
-            <div style="display: flex; gap: 8px;">
+            <input type="text" class="input" placeholder="Paste Workspace Invite Code" x-model="inviteCodeInput" @input="validateAndPreviewPass(inviteCodeInput)" />
+            
+            <!-- Live Ticket Preview Card (Human Centered) -->
+            <template x-if="passPreview">
+              <div class="pass-preview-card">
+                <div style="font-weight: 700; font-size: 0.85rem; color: var(--success); display: flex; align-items: center; gap: 6px;">
+                  <span>✓ Valid Workspace Pass</span>
+                </div>
+                <div style="margin-top: 6px; font-size: 0.8rem; color: white;">
+                  <strong>Name:</strong> <span x-text="passPreview.name"></span>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                  <strong>Creator:</strong> did:key:<span x-text="passPreview.creator"></span>
+                </div>
+              </div>
+            </template>
+            
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
               <button class="btn" @click="joinWorkspace()" :disabled="!inviteCodeInput">Join</button>
-              <button class="btn btn-secondary" @click="showJoinWorkspaceModal = false">Cancel</button>
+              <button class="btn btn-secondary" @click="showJoinWorkspaceModal = false; passPreview = null">Cancel</button>
             </div>
           </div>
         </div>
@@ -515,14 +570,26 @@
       <div class="overlay">
         <div class="dialog glass">
           <h2>Add Contact Manually</h2>
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <input type="text" class="input" placeholder="Alias Name (e.g. Alice)" x-model="newContactAlias" />
-            <input type="text" class="input" placeholder="Account ID" x-model="newContactId" />
-            <input type="text" class="input" placeholder="Message Encryption Key" x-model="newContactCurveId" />
-            <div style="display: flex; gap: 8px;">
-              <button class="btn" @click="createContact()" :disabled="!newContactId || !newContactCurveId">Add Contact</button>
-              <button class="btn btn-secondary" @click="showAddContactModal = false">Cancel</button>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Option 1: Paste Holo ID (Premium Simple) -->
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--accent);">Option 1: Paste Holo ID</span>
+              <input type="text" class="input" placeholder="e.g. @nickname:base64..." x-model="holoIdInput" @input="newContactId = ''; newContactCurveId = ''" />
+              <button class="btn" @click="importHoloIdContact()" :disabled="!holoIdInput">Import via Holo ID</button>
             </div>
+            
+            <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">— OR —</div>
+            
+            <!-- Option 2: Manual Cryptographic Keys (Advanced) -->
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Option 2: Advanced Manual Keys</span>
+              <input type="text" class="input" placeholder="Alias Name (e.g. Alice)" x-model="newContactAlias" @input="holoIdInput = ''" />
+              <input type="text" class="input" placeholder="Account ID" x-model="newContactId" @input="holoIdInput = ''" />
+              <input type="text" class="input" placeholder="Message Encryption Key" x-model="newContactCurveId" @input="holoIdInput = ''" />
+              <button class="btn btn-secondary" @click="createContact()" :disabled="!newContactId || !newContactCurveId">Add Contact</button>
+            </div>
+            
+            <button class="btn btn-secondary" style="margin-top: 8px;" @click="showAddContactModal = false; holoIdInput = ''">Cancel</button>
           </div>
         </div>
       </div>

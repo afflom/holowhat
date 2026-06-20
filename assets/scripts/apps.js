@@ -54,10 +54,28 @@ setInterval(() => {
   }
 }, 50);
 
-// Helper to announce all local events in the active workspace and channels
 function announceAllWorkspaceEvents() {
-  const shell = Alpine.$data(document.body);
+  const shell = window.shellInstance;
   if (!shell) return;
+
+  if (shell.participant) {
+    try {
+      const ann = {
+        type: "HoloIdAnnouncement",
+        id: shell.participant.id,
+        name: localStorage.getItem("holoapps_nickname") || "Operator",
+        curveId: shell.participant.curveId
+      };
+      const annJson = JSON.stringify(ann);
+      const bytes = new TextEncoder().encode(annJson);
+      const kappa = console0.cn_put(bytes);
+      console0.cn_announce(kappa);
+      console.log("Announced Holo ID to the local swarm:", ann);
+    } catch (e) {
+      console.error("Failed to announce Holo ID:", e);
+    }
+  }
+
   const toAnnounce = [];
   
   if (shell.activeWorkspace) {
@@ -103,7 +121,7 @@ function announceAllWorkspaceEvents() {
 const pendingEvents = [];
 
 async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId) {
-  const shell = Alpine.$data(document.body);
+  const shell = window.shellInstance;
   if (!shell) return;
   shell.saveEventToStorage(ev);
   
@@ -182,13 +200,25 @@ setInterval(async () => {
           processedKappas.add(kappa);
           try {
             const eventData = JSON.parse(new TextDecoder().decode(resolvedBytes));
-            console.log("WebRTC received event:", eventData.id, eventData.header.kind);
+            
+            if (eventData.type === "HoloIdAnnouncement") {
+              console.log("WebRTC received peer Holo ID announcement:", eventData.id, eventData.name);
+              const shell = window.shellInstance;
+              if (shell && eventData.id && eventData.id !== shell.participant?.id) {
+                if (!shell.discoveredPeers.some(p => p.id === eventData.id)) {
+                  shell.discoveredPeers.push(eventData);
+                }
+              }
+              continue;
+            }
+
+            console.log("WebRTC received event:", eventData.id, eventData.header ? eventData.header.kind : "unknown");
             
             const ev = new Event(eventData.header, eventData.body, eventData.signature, eventData.id);
-            const colId = ev.header.collection;
-            if (!colId && ev.header.kind !== "genesis") continue;
+            const colId = ev.header ? ev.header.collection : null;
+            if (!colId && (!ev.header || ev.header.kind !== "genesis")) continue;
             
-            const shell = Alpine.$data(document.body);
+            const shell = window.shellInstance;
             if (!shell) continue;
             
             // 1. Is it a workspace genesis event?
@@ -379,10 +409,15 @@ Alpine.data("shell", () => {
     showAddContactModal: false,
     showCreatePoolModal: false,
     showIdentityDetails: false,
+    discoveredPeers: [],
+    passPreview: null,
+    holoIdInput: "",
+    nicknameInput: localStorage.getItem("holoapps_nickname") || "Operator",
     
     topBarTitle: "Workspace Dashboard",
 
     async init() {
+      window.shellInstance = this;
       // 1. Load or Boot Identity
       const savedJwk = localStorage.getItem("holoapps_participant_jwk");
       if (savedJwk) {
@@ -433,6 +468,7 @@ Alpine.data("shell", () => {
       localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwk));
       localStorage.setItem("holoapps_identity_key", p.id);
       localStorage.setItem("holoapps_curve_key", p.curveId);
+      localStorage.setItem("holoapps_nickname", this.nicknameInput || "Operator");
       console.log("New self-sovereign participant identity created:", p.id);
       await this.onIdentityReady();
     },
@@ -450,6 +486,7 @@ Alpine.data("shell", () => {
         localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwkObj));
         localStorage.setItem("holoapps_identity_key", p.id);
         localStorage.setItem("holoapps_curve_key", p.curveId);
+        localStorage.setItem("holoapps_nickname", this.nicknameInput || "Operator");
         this.privateKeyHexInput = "";
         
         await this.onIdentityReady();
@@ -1197,6 +1234,162 @@ Alpine.data("shell", () => {
         localStorage.removeItem("holoapps_curve_key");
         window.location.reload();
       }
+    },
+
+    getHoloId() {
+      if (!this.participant) return "";
+      const nickname = localStorage.getItem("holoapps_nickname") || "Operator";
+      const payload = {
+        id: this.participant.id,
+        curveId: this.participant.curveId
+      };
+      const b64 = base64Encode(JSON.stringify(payload));
+      return `@${nickname}:${b64}`;
+    },
+
+    parseHoloId(str) {
+      if (!str || !str.startsWith("@") || !str.includes(":")) {
+        return null;
+      }
+      try {
+        const firstColonIdx = str.indexOf(":");
+        const nickname = str.substring(1, firstColonIdx);
+        const b64 = str.substring(firstColonIdx + 1);
+        const decoded = base64Decode(b64);
+        if (!decoded) return null;
+        const parsed = JSON.parse(decoded);
+        if (parsed && parsed.id && parsed.curveId) {
+          return {
+            name: nickname,
+            id: parsed.id,
+            curveId: parsed.curveId
+          };
+        }
+      } catch (e) {
+        console.error("Failed to parse Holo ID:", e);
+      }
+      return null;
+    },
+
+    async importHoloIdContact() {
+      if (!this.holoIdInput) return;
+      const parsed = this.parseHoloId(this.holoIdInput.trim());
+      if (!parsed) {
+        alert("Invalid Holo ID format. Expected format: @nickname:base64...");
+        return;
+      }
+      this.newContactAlias = parsed.name;
+      this.newContactId = parsed.id;
+      this.newContactCurveId = parsed.curveId;
+      await this.createContact();
+      this.holoIdInput = "";
+      this.showAddContactModal = false;
+    },
+
+    addDiscoveredContact(peer) {
+      this.discoverContact(peer.id, peer.curveId, peer.name);
+      this.discoveredPeers = this.discoveredPeers.filter(p => p.id !== peer.id);
+    },
+
+    copyHoloId() {
+      const holoId = this.getHoloId();
+      if (!holoId) return;
+      try {
+        navigator.clipboard.writeText(holoId).then(() => {
+          console.log("Copied Holo ID to clipboard successfully");
+        }).catch(err => {
+          console.log("Clipboard writeText failed:", err);
+          prompt("Copy your Holo ID:", holoId);
+        });
+      } catch (e) {
+        console.log("Clipboard API unavailable, showing fallback:", e);
+        prompt("Copy your Holo ID:", holoId);
+      }
+    },
+
+    validateAndPreviewPass(code) {
+      if (!code) {
+        this.passPreview = null;
+        return;
+      }
+      try {
+        const decoded = base64Decode(code.trim());
+        if (!decoded) {
+          this.passPreview = null;
+          return;
+        }
+        const payload = JSON.parse(decoded);
+        if (payload && payload.type === "WorkspaceInvite" && payload.id && payload.genesisEvent) {
+          const creator = payload.genesisEvent.header.author;
+          this.passPreview = {
+            name: payload.name || "Joined Workspace",
+            creator: creator ? creator.substring(0, 16) + "..." : "Unknown"
+          };
+        } else {
+          this.passPreview = null;
+        }
+      } catch (e) {
+        this.passPreview = null;
+      }
+    },
+
+    generateAvatarSvg(pubkey) {
+      if (!pubkey) {
+        return `<circle cx="50" cy="50" r="40" fill="url(#grad-default)" />
+                <defs>
+                  <linearGradient id="grad-default" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#4f46e5" />
+                    <stop offset="100%" stop-color="#ec4899" />
+                  </linearGradient>
+                </defs>`;
+      }
+      let hash = 0;
+      for (let i = 0; i < pubkey.length; i++) {
+        hash = (hash << 5) - hash + pubkey.charCodeAt(i);
+        hash |= 0;
+      }
+      
+      const hue1 = Math.abs(hash % 360);
+      const hue2 = (hue1 + 120) % 360;
+      const shapeType = Math.abs(hash >> 2) % 3;
+      
+      const col1 = `hsl(${hue1}, 70%, 50%)`;
+      const col2 = `hsl(${hue2}, 80%, 40%)`;
+      const colBg = `hsl(${(hue1 + 240) % 360}, 20%, 15%)`;
+      
+      const gradId = `grad-${pubkey.substring(0, 8)}-${Math.abs(hash)}`;
+      
+      let shapes = "";
+      if (shapeType === 0) {
+        shapes = `
+          <circle cx="50" cy="50" r="30" fill="${col2}" opacity="0.8" />
+          <circle cx="35" cy="35" r="15" fill="#fff" opacity="0.9" />
+          <circle cx="65" cy="50" r="12" fill="#fff" opacity="0.5" />
+        `;
+      } else if (shapeType === 1) {
+        shapes = `
+          <polygon points="50,15 15,75 85,75" fill="${col2}" opacity="0.8" />
+          <polygon points="50,30 30,70 70,70" fill="#fff" opacity="0.6" />
+          <circle cx="50" cy="55" r="10" fill="#fff" opacity="0.9" />
+        `;
+      } else {
+        shapes = `
+          <polygon points="50,15 80,50 50,85 20,50" fill="${col2}" opacity="0.8" />
+          <polygon points="50,25 70,50 50,75 30,50" fill="#fff" opacity="0.6" />
+          <circle cx="50" cy="50" r="8" fill="#fff" opacity="0.9" />
+        `;
+      }
+      
+      return `
+        <defs>
+          <linearGradient id="${gradId}" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="${col1}" />
+            <stop offset="100%" stop-color="${colBg}" />
+          </linearGradient>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#${gradId})" />
+        ${shapes}
+      `;
     }
   };
 });
