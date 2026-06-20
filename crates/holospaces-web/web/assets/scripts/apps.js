@@ -399,7 +399,7 @@ Alpine.data("shell", () => {
       // Warm up StandardsValidator context schemas
       try {
         const origin = window.location.origin;
-        const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : "";
+        const base = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
         const { StandardsValidator } = await import("./standards-validator.js");
         await StandardsValidator.init(`${origin}${base}/`);
       } catch (e) {

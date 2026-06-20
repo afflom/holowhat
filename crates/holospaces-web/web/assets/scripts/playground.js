@@ -298,7 +298,7 @@ async function bootstrapPresets() {
     for (const block of blocks) {
       const name = block.replace(".html", "");
       try {
-        const resp = await originalFetch("/blocks/" + block);
+        const resp = await originalFetch("blocks/" + block);
         if (resp.ok) {
           const text = await resp.text();
           pkgHandle.change(doc => {

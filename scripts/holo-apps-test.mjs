@@ -249,6 +249,15 @@ async function runTests() {
     assert.strictEqual(reduced.messages[0].body, "Hello World (Edited)", "Edit should replace the rendered body");
     assert.strictEqual(reduced.messages[0].reactions[0].symbol, "👍", "Reactions should aggregate");
     assert.strictEqual(reduced.messages[0].reactions[0].count, 1, "Reaction count should update");
+
+    // Test deletion rule
+    const deletedEvents = [
+      ...msgEvents,
+      { id: "del-1", author: alice.id, clock: 4, kind: "delete", payload: { target: "msg-1" } }
+    ];
+    const reducedDeleted = messengerReducer(deletedEvents);
+    assert.strictEqual(reducedDeleted.messages.length, 0, "Deleted message must be retracted from the list");
+
     console.log("✓ Messenger Reducer validation PASSED");
 
     // 7. W3C ActivityStreams 2.0 & Schema.org Conformance Test
