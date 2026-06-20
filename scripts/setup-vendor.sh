@@ -86,6 +86,12 @@ echo "setup-vendor: copying custom blocks..."
 cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/shell-block.html" "$VENDOR_DIR/playground/blocks/"
 cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/messenger-block.html" "$VENDOR_DIR/playground/blocks/"
 cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/login-block.html" "$VENDOR_DIR/playground/blocks/"
+cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/navbar-block.html" "$VENDOR_DIR/playground/blocks/"
+cp -f "$ROOT/crates/holospaces-web/web/custom-blocks/world-sync-mixin.html" "$VENDOR_DIR/playground/blocks/"
+
+# Copy custom scripts into Playground public assets scripts directory
+echo "setup-vendor: copying custom scripts..."
+cp -f "$ROOT/crates/holospaces-web/web/custom-scripts/alpine-block.js" "$VENDOR_DIR/playground/public/assets/scripts/"
 
 # Copy custom CSS into Playground public assets CSS directory
 echo "setup-vendor: copying custom CSS..."
