@@ -88,7 +88,7 @@ export function base64Decode(str) {
         }
       }
     } catch (e) {
-      console.warn("Failed to parse base64 input as URL:", e);
+      console.log("Failed to parse base64 input as URL:", e);
     }
   }
 
@@ -109,7 +109,7 @@ export function base64Decode(str) {
   try {
     return decodeURIComponent(escape(atob(cleanStr)));
   } catch (e) {
-    console.warn("base64Decode: Failed to decode base64 string:", e.message);
+    console.log("base64Decode: Failed to decode base64 string:", e.message);
     return "";
   }
 }
@@ -203,7 +203,7 @@ export class HoloAppsCrypto {
         data
       );
     } catch (e) {
-      console.error("Signature verification error:", e);
+      console.log("Signature verification error:", e);
       return false;
     }
   }
@@ -491,7 +491,7 @@ export class Collection {
     // Verify event signature and hash
     const isValid = await event.verify();
     if (!isValid) {
-      console.warn(`Collection ${this.id}: Refused event with invalid signature/hash: ${event.id}`);
+      console.log(`Collection ${this.id}: Refused event with invalid signature/hash: ${event.id}`);
       return false;
     }
 
@@ -509,7 +509,7 @@ export class Collection {
     // Re-evaluate capability list at this event's causality
     const authorized = await this.checkEventAuthority(event);
     if (!authorized) {
-      console.warn(`Collection ${this.id}: Refused unauthorized event ${event.id} from ${event.header.author}`);
+      console.log(`Collection ${this.id}: Refused unauthorized event ${event.id} from ${event.header.author}`);
       this.events.delete(event.id);
       return false;
     }
@@ -640,7 +640,7 @@ export class Collection {
       const decryptedText = await HoloAppsCrypto.openPayload(epochKey, event.body.ciphertext, event.body.iv);
       return JSON.parse(decryptedText);
     } catch (e) {
-      console.error(`Failed to decrypt event body for ${event.id} under epoch ${epochId}:`, e);
+      console.log(`Failed to decrypt event body for ${event.id} under epoch ${epochId}:`, e);
       return null;
     }
   }
@@ -665,7 +665,7 @@ export class Collection {
       this.currentEpochId = epochEvent.id;
       return true;
     } catch (e) {
-      console.error(`Failed to unwrap epoch key for epoch ${epochEvent.id}:`, e);
+      console.log(`Failed to unwrap epoch key for epoch ${epochEvent.id}:`, e);
       return false;
     }
   }

@@ -18,10 +18,10 @@ export class StandardsValidator {
         this.schemaContext = (await schemaResp.json())["@context"];
         console.log("StandardsValidator: Authorized contexts successfully loaded for runtime verification.");
       } else {
-        console.error("StandardsValidator: Context endpoints returned non-ok responses.", asResp.status, schemaResp.status);
+        console.log("StandardsValidator: Context endpoints returned non-ok responses.", asResp.status, schemaResp.status);
       }
     } catch (e) {
-      console.error("StandardsValidator: Failed to load authoritative schemas context files:", e);
+      console.log("StandardsValidator: Failed to load authoritative schemas context files:", e);
     }
   }
 
