@@ -207,6 +207,7 @@ impl WebRtcLink {
             let (m, o) = wire_channel(&channel, &shared);
             *on_message_cell.borrow_mut() = Some(m);
             *on_open_cell.borrow_mut() = Some(o);
+            shared.borrow_mut().channel = Some(channel);
         }
 
         // The answerer receives the channel via ondatachannel; wire it then and
@@ -216,6 +217,7 @@ impl WebRtcLink {
             let channel = e.channel();
             let (m, o) = wire_channel(&channel, &s_dc);
             let mut s = s_dc.borrow_mut();
+            s.channel = Some(channel);
             s.answerer_closures.push(m.into_js_value());
             s.answerer_closures.push(o.into_js_value());
         }) as Box<dyn FnMut(RtcDataChannelEvent)>);
@@ -305,9 +307,6 @@ impl WebRtcLink {
     #[must_use]
     pub fn is_open(&self) -> bool {
         let s = self.shared.borrow();
-        if !s.open {
-            return false;
-        }
         if let Some(ch) = &s.channel {
             ch.ready_state() == web_sys::RtcDataChannelState::Open
         } else {
