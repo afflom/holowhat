@@ -503,6 +503,15 @@ Alpine.data("shell", () => {
     showAddContactModal: false,
     showCreatePoolModal: false,
     showIdentityDetails: false,
+    showWebRtcModal: false,
+    webrtcRole: 'initiate',
+    webrtcOfferCode: '',
+    webrtcAnswerCodeInput: '',
+    webrtcOfferCodeInput: '',
+    webrtcAnswerCode: '',
+    get isWebRtcConnected() {
+      return !!(window.cnLink && window.cnLink.is_open());
+    },
     discoveredPeers: [],
     passPreview: null,
     holoIdInput: "",
@@ -1170,8 +1179,19 @@ Alpine.data("shell", () => {
       this.saveEventToStorage(addEvent);
 
       const state = await wsCol.render();
-      this.activeWorkspace.channels = state.channels;
-      this.channels = state.channels;
+      const idx = this.workspaces.findIndex(w => w.id === this.activeWorkspace.id);
+      if (idx !== -1) {
+        const oldChannels = this.workspaces[idx].channels || [];
+        const newChannels = state.channels.map(ch => {
+          const existing = oldChannels.find(c => c.id === ch.id);
+          return { id: ch.id, name: ch.name, collection: existing ? existing.collection : null };
+        });
+        this.activeWorkspace = { ...this.activeWorkspace, channels: newChannels };
+        this.workspaces[idx] = this.activeWorkspace;
+      } else {
+        this.activeWorkspace.channels = state.channels;
+      }
+      this.channels = this.activeWorkspace.channels;
 
       this.newChannelName = "";
       this.showCreateChannelModal = false;
@@ -1238,7 +1258,13 @@ Alpine.data("shell", () => {
       this.saveEventToStorage(addEvent);
 
       const state = await wsCol.render();
-      this.activeWorkspace.members = state.members;
+      const idx = this.workspaces.findIndex(w => w.id === this.activeWorkspace.id);
+      if (idx !== -1) {
+        this.activeWorkspace = { ...this.activeWorkspace, members: state.members };
+        this.workspaces[idx] = this.activeWorkspace;
+      } else {
+        this.activeWorkspace.members = state.members;
+      }
       
       alert("Member added to workspace!");
     },
@@ -1286,7 +1312,13 @@ Alpine.data("shell", () => {
       this.saveEventToStorage(addEvent);
       
       const state = await wsCol.render();
-      this.activeWorkspace.members = state.members;
+      const idx = this.workspaces.findIndex(w => w.id === this.activeWorkspace.id);
+      if (idx !== -1) {
+        this.activeWorkspace = { ...this.activeWorkspace, members: state.members };
+        this.workspaces[idx] = this.activeWorkspace;
+      } else {
+        this.activeWorkspace.members = state.members;
+      }
       alert("Member promoted to Workspace Admin!");
     },
 
@@ -1333,7 +1365,13 @@ Alpine.data("shell", () => {
       this.saveEventToStorage(addEvent);
       
       const state = await wsCol.render();
-      this.activeWorkspace.members = state.members;
+      const idx = this.workspaces.findIndex(w => w.id === this.activeWorkspace.id);
+      if (idx !== -1) {
+        this.activeWorkspace = { ...this.activeWorkspace, members: state.members };
+        this.workspaces[idx] = this.activeWorkspace;
+      } else {
+        this.activeWorkspace.members = state.members;
+      }
       alert("Member demoted to Workspace Member!");
     },
 
@@ -1480,6 +1518,65 @@ Alpine.data("shell", () => {
       } catch (e) {
         console.error("joinWorkspace error: Exception caught during processing:", e);
         alert("Failed to join workspace.");
+      }
+    },
+
+    async generateOffer() {
+      try {
+        const sdp = await window.connectPeerLink(true);
+        // Wait 1.2 seconds for ICE candidate gathering
+        await new Promise(r => setTimeout(r, 1200));
+        const ice = window.cnLink.take_ice();
+        const payload = { sdp, ice };
+        this.webrtcOfferCode = base64Encode(JSON.stringify(payload));
+      } catch (e) {
+        console.error("WebRTC offer generation failed:", e);
+        alert("Failed to generate Offer: " + e.message);
+      }
+    },
+
+    async generateAnswer() {
+      if (!this.webrtcOfferCodeInput) return;
+      try {
+        const decoded = base64Decode(this.webrtcOfferCodeInput.trim());
+        if (!decoded) {
+          alert("Invalid Offer Code format.");
+          return;
+        }
+        const offer = JSON.parse(decoded);
+        const answerSdp = await window.connectPeerLink(false, offer.sdp);
+        // Add Alice's ICE candidates
+        for (const candidate of offer.ice) {
+          await window.cnLink.add_ice(candidate);
+        }
+        // Wait 1.2 seconds to gather Bob's ICE candidates
+        await new Promise(r => setTimeout(r, 1200));
+        const ice = window.cnLink.take_ice();
+        const payload = { sdp: answerSdp, ice };
+        this.webrtcAnswerCode = base64Encode(JSON.stringify(payload));
+      } catch (e) {
+        console.error("WebRTC answer generation failed:", e);
+        alert("Failed to generate Answer: " + e.message);
+      }
+    },
+
+    async completeConnection() {
+      if (!this.webrtcAnswerCodeInput) return;
+      try {
+        const decoded = base64Decode(this.webrtcAnswerCodeInput.trim());
+        if (!decoded) {
+          alert("Invalid Answer Code format.");
+          return;
+        }
+        const answer = JSON.parse(decoded);
+        await window.acceptPeerAnswer(answer.sdp);
+        for (const candidate of answer.ice) {
+          await window.cnLink.add_ice(candidate);
+        }
+        alert("WebRTC handshake completed! Peer connection opening...");
+      } catch (e) {
+        console.error("WebRTC handshake completion failed:", e);
+        alert("Failed to complete connection: " + e.message);
       }
     },
 
