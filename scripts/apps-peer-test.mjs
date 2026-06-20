@@ -159,8 +159,12 @@ server.listen(PORT, async () => {
       }
     });
 
+    console.log("Alice opening Workspace Manager modal...");
+    await alicePage.locator("button:has-text('Manage Workspace')").click();
     console.log("Alice generating workspace invite code...");
     await alicePage.locator("button:has-text('Generate Workspace Invite Link/Code')").click();
+    console.log("Alice closing Workspace Manager modal...");
+    await alicePage.locator(".dialog:has(h2:has-text('Workspace:')) button:text-is('Close')").click();
     assert.ok(aliceInviteCode, "Workspace invite code must be generated");
 
     // 5. Bob joins the workspace
@@ -269,7 +273,9 @@ server.listen(PORT, async () => {
       await dialog.accept();
     });
     await alicePage.locator(".sidebar-item:has-text('Workspace Dashboard')").click();
+    await alicePage.locator("button:has-text('Manage Workspace')").click();
     await alicePage.locator("button:has-text('Promote')").click();
+    await alicePage.locator(".dialog:has(h2:has-text('Workspace:')) button:text-is('Close')").click();
     
     console.log("Waiting for Bob to sync admin status...");
     await new Promise(r => setTimeout(r, 3000));

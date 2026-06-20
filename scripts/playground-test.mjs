@@ -238,10 +238,20 @@ server.listen(PORT, async () => {
     await newWsSidebar.waitFor({ timeout: 10000 });
     console.log("New workspace created successfully.");
 
+    console.log("Opening Workspace Manager modal...");
+    const openManageBtn = page.locator("button:has-text('Manage Workspace')");
+    await openManageBtn.waitFor({ timeout: 5000 });
+    await openManageBtn.click();
+
     console.log("Generating Workspace Invite Link/Code...");
     const genInviteBtn = page.locator("button:has-text('Generate Workspace Invite Link/Code')");
     await genInviteBtn.waitFor({ timeout: 5000 });
     await genInviteBtn.click();
+
+    console.log("Closing Workspace Manager modal...");
+    const closeBtn = page.locator(".dialog:has(h2:has-text('Workspace:')) button:text-is('Close')");
+    await closeBtn.waitFor({ timeout: 5000 });
+    await closeBtn.click();
     console.log("Captured Workspace Invite Code length:", lastPromptValue.length);
     const savedInviteCode = lastPromptValue;
 
@@ -277,10 +287,20 @@ server.listen(PORT, async () => {
     await addMemberBtn.waitFor({ timeout: 5000 });
     await addMemberBtn.click();
 
+    console.log("Opening Workspace Manager modal to verify roster...");
+    const openManageBtn2 = page.locator("button:has-text('Manage Workspace')");
+    await openManageBtn2.waitFor({ timeout: 5000 });
+    await openManageBtn2.click();
+
     console.log("Verifying new member is in roster...");
     const memberRosterItem = page.locator("span:has-text('04b3e295316af8b6...')");
     await memberRosterItem.waitFor({ timeout: 10000 });
     console.log("Member successfully added and verified in roster!");
+
+    console.log("Closing Workspace Manager modal...");
+    const closeBtn2 = page.locator(".dialog:has(h2:has-text('Workspace:')) button:text-is('Close')");
+    await closeBtn2.waitFor({ timeout: 5000 });
+    await closeBtn2.click();
 
     console.log("Creating channel in workspace...");
     const createChanBtn = page.locator("button:has-text('+ Channel')");

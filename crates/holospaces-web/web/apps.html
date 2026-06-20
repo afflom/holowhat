@@ -123,14 +123,14 @@
           
           <div class="content-pane">
             
-            <!-- Dashboard Tab (Cryptographic Control Plane) -->
+            <!-- Dashboard Tab (Non-Scrolling Control Panel) -->
             <template x-if="activeTab === 'dashboard'">
-              <div style="display: flex; flex-direction: column; gap: 20px; max-width: 900px; width: 100%;">
+              <div style="display: flex; flex-direction: column; gap: 16px; max-width: 900px; width: 100%; height: 100%; overflow: hidden;">
                 
-                <h3 style="font-size: 1.25rem; font-weight: 700; color: white; display: block; margin: 0 0 10px 0;">User Account & Security</h3>
+                <h3 style="font-size: 1.25rem; font-weight: 700; color: white; margin: 0;">User Account & Security</h3>
                 
                 <!-- User ID Card (Human-Centered) -->
-                <div class="user-id-card">
+                <div class="user-id-card" style="margin-bottom: 0; flex-shrink: 0;">
                   <svg class="avatar-svg" viewBox="0 0 100 100" x-html="generateAvatarSvg(participant ? participant.id : '')"></svg>
                   <div class="card-details">
                     <div class="card-nickname" x-text="localStorage.getItem('holoapps_nickname') || 'Operator'"></div>
@@ -142,178 +142,58 @@
                   <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px;" @click="showIdentityDetails = true">Config</button>
                 </div>
                 
-                <!-- Clean Connection & Network Overview -->
-                <div class="system-widgets-grid">
-                  <!-- Active Workspace Status Widget -->
-                  <div class="widget-card">
-                    <div class="widget-header">Current Workspace</div>
-                    <div class="widget-value" style="font-family: inherit; font-size: 1.25rem; word-break: break-all; margin-top: 4px;" x-text="activeWorkspace ? activeWorkspace.name : 'No Active Workspace'"></div>
-                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: auto;" x-text="activeWorkspace ? (activeWorkspace.members.length + ' members • ' + activeWorkspace.channels.length + ' channels') : 'Create or join a workspace to start'"></div>
-                  </div>
-
-                  <!-- WebRTC Connection Status Widget -->
-                  <div class="widget-card" @click="showWebRtcModal = true" style="cursor: pointer; transition: transform 0.2s, border-color 0.2s;">
-                    <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
-                      <span>Swarm Status</span>
-                      <span style="font-size: 0.7rem; color: var(--accent); border: 1px solid var(--accent); padding: 1px 5px; border-radius: 4px;">🔗 Link</span>
-                    </div>
-                    <div class="widget-value" :style="{ color: isWebRtcConnected ? 'var(--success)' : 'var(--error)' }" x-text="isWebRtcConnected ? 'Online & Syncing' : 'Disconnected (Offline)'" style="font-family: inherit; font-size: 1.25rem; margin-top: 4px;">Disconnected (Offline)</div>
-                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: auto;" x-text="isWebRtcConnected ? 'Synchronizing workspace events in real-time' : 'Click to connect with peers'"></div>
-                  </div>
-                </div>
-
-                <!-- Active Workspace Details -->
-                <template x-if="activeWorkspace">
-                  <div class="settings-section-card">
-                    <div class="settings-card-header">
-                      <span x-text="'Workspace: ' + activeWorkspace.name"></span>
-                      <button class="btn" style="font-size: 0.8rem; padding: 6px 12px;" @click="exportActiveWorkspaceInvite()">
-                        Generate Workspace Invite Link/Code
-                      </button>
-                    </div>
-                    
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                      <!-- Members list -->
-                      <div style="margin-top: 8px;">
-                        <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; text-transform: uppercase;">Workspace Roster:</span>
-                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
-                          <template x-for="mId in activeWorkspace.members" :key="mId">
-                            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.01); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);">
-                              <div style="display: flex; flex-direction: column; gap: 4px;">
-                                <span style="font-family: monospace; font-size: 0.85rem;" x-text="mId === (participant ? participant.id : '') ? 'You (' + mId.substring(0, 16) + '...)' : mId.substring(0, 16) + '...'"></span>
-                                <div style="display: flex; gap: 6px; align-items: center;">
-                                  <span style="font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: var(--text-muted);"
-                                        x-text="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? 'Admin' : 'Member'">
-                                  </span>
-                                </div>
-                              </div>
-                              <div style="display: flex; gap: 6px;">
-                                <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 2px 8px;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0,6)); alert('Member added to your Default contacts!')">Add to Contacts</button>
-                                <template x-if="mId !== (participant ? participant.id : '') && activeWorkspace.collection.capabilities.get(participant.id)?.includes('admin')">
-                                  <button class="btn" style="font-size: 0.75rem; padding: 2px 8px; background: var(--accent); border-color: rgba(99,102,241,0.2);"
-                                          @click="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? demoteWorkspaceMember(mId) : promoteWorkspaceMember(mId)"
-                                          x-text="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? 'Demote' : 'Promote'">
-                                  </button>
-                                </template>
-                              </div>
-                            </div>
-                          </template>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-
-                <!-- Key Custody Card -->
-                <div class="settings-section-card">
-                  <div class="settings-card-header">🔑 Account Backup & Recovery</div>
-                  <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5;">
-                    Your account keys are saved locally in your browser's secure storage. Export an account backup to restore access on other devices.
-                  </p>
-                  <div style="display: flex; gap: 12px;">
-                    <button class="btn" @click="exportIdentity()">
-                      Export Account Backup
-                    </button>
-                    <button class="btn" style="background: var(--error); border-color: rgba(239, 68, 68, 0.2);" @click="clearIdentity()">
-                      Wipe Account Data
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Technical Diagnostics (Collapsible for Power Users/Developers) -->
-                <details class="settings-section-card" style="background: rgba(255,255,255,0.01); border-color: rgba(255,255,255,0.04); cursor: pointer;">
-                  <summary style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; outline: none; list-style: none; display: flex; justify-content: space-between; align-items: center; user-select: none;">
-                    <span>🖥️ OS Control Panel & Kernel Diagnostics</span>
-                    <span style="font-size: 0.75rem;">Click to toggle details</span>
-                  </summary>
+                <!-- OS Control Center Grid (2x2 proportioned to screen) -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex-grow: 1; min-height: 0;">
                   
-                  <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px; cursor: default;" @click.stop>
-                    
-                    <!-- Open Standards Schema.org System Overview -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 0.8rem; line-height: 1.5; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
-                      <div>
-                        <span style="color: var(--text-muted);">Application Name:</span> <strong style="color: white;">Holo-Apps WebOS Control Panel</strong>
-                      </div>
-                      <div>
-                        <span style="color: var(--text-muted);">Operating System:</span> <strong style="color: #38bdf8;">Substrate Wasm Peer Kernel (L3)</strong>
-                      </div>
-                      <div>
-                        <span style="color: var(--text-muted);">Replication Model:</span> <strong style="color: var(--success);">WebRTC Swarm link / AS2 DAG</strong>
-                      </div>
-                      <div>
-                        <span style="color: var(--text-muted);">State Reduction:</span> <strong style="color: #c084fc;">Deterministic Topological reduction (L1)</strong>
-                      </div>
+                  <!-- Workspace Control -->
+                  <div class="widget-card glass" style="justify-content: space-between; padding: 20px;">
+                    <div>
+                      <div class="widget-header">🗂️ Workspace Manager</div>
+                      <div class="widget-value" style="font-family: inherit; font-size: 1.25rem; word-break: break-all; margin-top: 8px;" x-text="activeWorkspace ? activeWorkspace.name : 'No Workspace Active'"></div>
+                      <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;" x-text="activeWorkspace ? (activeWorkspace.members.length + ' members • ' + activeWorkspace.channels.length + ' channels') : 'Connect to a workspace to start collaboration'"></div>
                     </div>
-
-                    <!-- Hardware & Resource Monitors Grid -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.8rem;">
-                      <div class="widget-card" style="padding: 10px;">
-                        <div class="widget-header" style="font-size: 0.7rem;">Causal Ledger Log Size</div>
-                        <div class="widget-value" style="font-size: 1.1rem; margin-top: 4px;" x-text="activeWorkspace ? activeWorkspace.collection.events.size + ' events' : 'offline'"></div>
-                      </div>
-                      <div class="widget-card" style="padding: 10px;">
-                        <div class="widget-header" style="font-size: 0.7rem;">Active Swarm Front Forks</div>
-                        <div class="widget-value" style="font-size: 1.1rem; margin-top: 4px;" x-text="activeWorkspace ? activeWorkspace.collection.heads.size + ' heads' : 'idle'"></div>
-                      </div>
-                    </div>
-
-                    <!-- Workspace ID Card -->
-                    <template x-if="activeWorkspace">
-                      <div>
-                        <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 500;">Workspace ID (κ):</span>
-                        <code style="display: block; font-family: monospace; font-size: 0.78rem; word-break: break-all; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; color: #38bdf8; border: 1px solid var(--border); margin-top: 4px;" x-text="activeWorkspace.id"></code>
-                      </div>
-                    </template>
-
-                    <!-- Keys and Configuration Card -->
-                    <div style="display: flex; flex-direction: column; gap: 12px; font-family: 'Source Code Pro', monospace; font-size: 0.8rem;">
-                      <div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                          <span style="color: var(--text-muted); font-weight: 500;">Signing Account ID (ECDSA):</span>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; border: 1px solid var(--border);">
-                          <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #38bdf8; font-size: 0.75rem;" x-text="participant ? participant.id : ''"></div>
-                          <button class="btn btn-secondary" style="font-size: 0.7rem; padding: 2px 6px;" @click="navigator.clipboard.writeText(participant ? participant.id : ''); alert('Copied Account ID')">Copy</button>
-                        </div>
-                      </div>
-                      <div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                          <span style="color: var(--text-muted); font-weight: 500;">Message Encryption Key (ECDH):</span>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; border: 1px solid var(--border);">
-                          <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #c084fc; font-size: 0.75rem;" x-text="participant ? participant.curveId : ''"></div>
-                          <button class="btn btn-secondary" style="font-size: 0.7rem; padding: 2px 6px;" @click="navigator.clipboard.writeText(participant ? participant.curveId : ''); alert('Copied Encryption Key')">Copy</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Live Causal Event Stream (JSON-LD Terminal Console) -->
-                    <div class="terminal-box" style="height: 180px;">
-                      <div class="terminal-header">
-                        <div class="terminal-dots">
-                          <div class="terminal-dot close"></div>
-                          <div class="terminal-dot minimize"></div>
-                          <div class="terminal-dot expand"></div>
-                        </div>
-                        <span>causal-ledger@webos: /dev/substrate</span>
-                        <span style="font-size: 0.65rem; color: #10b981;">● active</span>
-                      </div>
-                      <div class="terminal-body" style="font-size: 0.75rem;">
-                        <div class="terminal-line"><span class="terminal-prompt">[holo-apps-kernel]</span> initializing WebOS Control Panel terminal monitor...</div>
-                        <div class="terminal-line"><span class="terminal-prompt">[holo-apps-kernel]</span> loading decentralized ActivityStreams event logs...</div>
-                        
-                        <template x-if="!activeWorkspace || rawEventStream.length === 0">
-                          <div class="terminal-line" style="color: var(--text-muted);">No transaction logs recorded. Select a Workspace to display ActivityStreams JSON-LD stream.</div>
-                        </template>
-                        
-                        <template x-for="jsonStr in rawEventStream" :key="jsonStr">
-                          <pre style="color: #a855f7; margin-bottom: 8px; font-size: 0.7rem;" x-text="jsonStr"></pre>
-                        </template>
-                      </div>
-                    </div>
-
+                    <button class="btn" style="width: 100%; margin-top: 12px; font-size: 0.82rem;" @click="showWorkspaceManageModal = true" :disabled="!activeWorkspace">
+                      Manage Workspace
+                    </button>
                   </div>
-                </details>
+
+                  <!-- Network / WebRTC Swarm -->
+                  <div class="widget-card glass" style="justify-content: space-between; padding: 20px;">
+                    <div>
+                      <div class="widget-header">🌐 Network Status</div>
+                      <div class="widget-value" :style="{ color: isWebRtcConnected ? 'var(--success)' : 'var(--error)' }" x-text="isWebRtcConnected ? 'Connected & Online' : 'Offline / Disconnected'" style="font-family: inherit; font-size: 1.25rem; margin-top: 8px;">Offline / Disconnected</div>
+                      <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;" x-text="isWebRtcConnected ? 'Exchanging causal ledger events in real-time' : 'Configure WebRTC link signaling to sync'"></div>
+                    </div>
+                    <button class="btn" style="width: 100%; margin-top: 12px; font-size: 0.82rem;" @click="showWebRtcModal = true">
+                      Swarm Status
+                    </button>
+                  </div>
+
+                  <!-- Security & Keys -->
+                  <div class="widget-card glass" style="justify-content: space-between; padding: 20px;">
+                    <div>
+                      <div class="widget-header">🛡️ Security Keys</div>
+                      <div class="widget-value" style="font-family: inherit; font-size: 1.25rem; margin-top: 8px; color: #38bdf8;">ECDSA & ECDH P-256</div>
+                      <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">Cryptographic signing ID & message encryption keys</div>
+                    </div>
+                    <button class="btn" style="width: 100%; margin-top: 12px; font-size: 0.82rem;" @click="showSecurityKeysModal = true">
+                      View Account Keys
+                    </button>
+                  </div>
+
+                  <!-- diagnostics / logs / backups -->
+                  <div class="widget-card glass" style="justify-content: space-between; padding: 20px;">
+                    <div>
+                      <div class="widget-header">🖥️ System Diagnostics</div>
+                      <div class="widget-value" style="font-family: inherit; font-size: 1.25rem; margin-top: 8px; color: #c084fc;">OS & Ledger Diagnostics</div>
+                      <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">Kernel logs, event terminal, recovery & local backups</div>
+                    </div>
+                    <button class="btn" style="width: 100%; margin-top: 12px; font-size: 0.82rem;" @click="showDiagnosticsModal = true">
+                      Diagnostics Console
+                    </button>
+                  </div>
+
+                </div>
 
               </div>
             </template>
@@ -718,6 +598,171 @@
               <button class="btn btn-secondary" @click="showWebRtcModal = false">Close</button>
             </div>
           </div>
+        </div>
+      </div>
+    </template>
+    
+    <!-- Workspace Manage Modal -->
+    <template x-if="showWorkspaceManageModal">
+      <div class="overlay" @click="showWorkspaceManageModal = false">
+        <template x-if="activeWorkspace">
+          <div class="dialog glass" style="max-width: 600px; width: 100%; max-height: 85vh; display: flex; flex-direction: column;" @click.stop>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
+              <h2 x-text="'Workspace: ' + activeWorkspace.name" style="margin: 0; font-size: 1.3rem;">Workspace Control Center</h2>
+              <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;" @click="exportActiveWorkspaceInvite()">
+                Generate Workspace Invite Link/Code
+              </button>
+            </div>
+            
+            <div style="flex-grow: 1; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px;">
+              <span style="color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Workspace Roster:</span>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <template x-for="mId in activeWorkspace.members" :key="mId">
+                  <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                      <span style="font-family: monospace; font-size: 0.85rem;" x-text="mId === (participant ? participant.id : '') ? 'You (' + mId.substring(0, 16) + '...)' : mId.substring(0, 16) + '...'"></span>
+                      <div style="display: flex; gap: 6px; align-items: center;">
+                        <span style="font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: var(--text-muted);"
+                              x-text="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? 'Admin' : 'Member'">
+                        </span>
+                      </div>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                      <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0,6)); alert('Member added to your Default contacts!')">Add to Contacts</button>
+                      <template x-if="mId !== (participant ? participant.id : '') && activeWorkspace.collection.capabilities.get(participant.id)?.includes('admin')">
+                        <button class="btn" style="font-size: 0.75rem; padding: 4px 8px; background: var(--accent); border-color: rgba(99,102,241,0.2);"
+                                @click="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? demoteWorkspaceMember(mId) : promoteWorkspaceMember(mId)"
+                                x-text="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? 'Demote' : 'Promote'">
+                        </button>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+            
+            <button class="btn btn-secondary" style="width: 100%;" @click="showWorkspaceManageModal = false">Close</button>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Security & Keys Modal -->
+    <template x-if="showSecurityKeysModal">
+      <div class="overlay" @click="showSecurityKeysModal = false">
+        <div class="dialog glass" style="max-width: 550px; width: 100%;" @click.stop>
+          <div style="border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+            <h2 style="margin: 0; font-size: 1.3rem;">Account Security Keys</h2>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 16px; font-family: 'Source Code Pro', monospace; font-size: 0.85rem;">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="color: var(--text-muted); font-weight: 500;">Signing Account ID:</span>
+                <span style="font-size: 0.75rem; background: rgba(99, 102, 241, 0.1); color: #818cf8; padding: 2px 8px; border-radius: 20px;">ECDSA P-256</span>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+                <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #38bdf8;" x-text="participant ? participant.id : ''"></div>
+                <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.id : ''); alert('Copied Account ID')">Copy</button>
+              </div>
+            </div>
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="color: var(--text-muted); font-weight: 500;">Message Encryption Key:</span>
+                <span style="font-size: 0.75rem; background: rgba(168, 85, 247, 0.1); color: #c084fc; padding: 2px 8px; border-radius: 20px;">ECDH P-256</span>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+                <div style="overflow-x: auto; word-break: break-all; flex-grow: 1; color: #c084fc;" x-text="participant ? participant.curveId : ''"></div>
+                <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" @click="navigator.clipboard.writeText(participant ? participant.curveId : ''); alert('Copied Encryption Key')">Copy</button>
+              </div>
+            </div>
+          </div>
+          
+          <button class="btn btn-secondary" style="width: 100%; margin-top: 10px;" @click="showSecurityKeysModal = false">Close</button>
+        </div>
+      </div>
+    </template>
+
+    <!-- Diagnostics & Console Modal -->
+    <template x-if="showDiagnosticsModal">
+      <div class="overlay" @click="showDiagnosticsModal = false">
+        <div class="dialog glass" style="max-width: 750px; width: 100%; max-height: 90vh; display: flex; flex-direction: column;" @click.stop>
+          <div style="border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 14px;">
+            <h2 style="margin: 0; font-size: 1.3rem;">🖥️ OS Kernel & Diagnostics Console</h2>
+          </div>
+          
+          <div style="flex-grow: 1; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 16px; margin-bottom: 12px;">
+            <!-- OS Information -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 0.8rem; line-height: 1.5; background: rgba(0,0,0,0.25); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+              <div>
+                <span style="color: var(--text-muted);">Application Name:</span> <strong style="color: white;">Holo-Apps WebOS Control Panel</strong>
+              </div>
+              <div>
+                <span style="color: var(--text-muted);">Operating System:</span> <strong style="color: #38bdf8;">Substrate Wasm Peer Kernel (L3)</strong>
+              </div>
+              <div>
+                <span style="color: var(--text-muted);">Replication Model:</span> <strong style="color: var(--success);">WebRTC Swarm link / AS2 DAG</strong>
+              </div>
+              <div>
+                <span style="color: var(--text-muted);">State Reduction:</span> <strong style="color: #c084fc;">Deterministic Topological reduction (L1)</strong>
+              </div>
+            </div>
+
+            <!-- Monitors -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.8rem;">
+              <div class="widget-card" style="padding: 10px;">
+                <div class="widget-header" style="font-size: 0.7rem;">Causal Ledger Log Size</div>
+                <div class="widget-value" style="font-size: 1.1rem; margin-top: 4px;" x-text="activeWorkspace ? activeWorkspace.collection.events.size + ' events' : 'offline'"></div>
+              </div>
+              <div class="widget-card" style="padding: 10px;">
+                <div class="widget-header" style="font-size: 0.7rem;">Active Swarm Front Forks</div>
+                <div class="widget-value" style="font-size: 1.1rem; margin-top: 4px;" x-text="activeWorkspace ? activeWorkspace.collection.heads.size + ' heads' : 'idle'"></div>
+              </div>
+            </div>
+
+            <!-- Recovery & Backups -->
+            <div style="background: rgba(255,255,255,0.02); padding: 16px; border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; gap: 10px;">
+              <span style="font-size: 0.85rem; font-weight: 700; color: white;">🔑 Account Backup & Recovery</span>
+              <p style="color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4; margin: 0;">
+                Your account keys are saved locally in your browser's secure storage. Export an account backup to restore access on other devices.
+              </p>
+              <div style="display: flex; gap: 12px; margin-top: 4px;">
+                <button class="btn" style="font-size: 0.8rem; padding: 6px 12px;" @click="exportIdentity()">
+                  Export Account Backup
+                </button>
+                <button class="btn" style="background: var(--error); border-color: rgba(239, 68, 68, 0.2); font-size: 0.8rem; padding: 6px 12px;" @click="clearIdentity()">
+                  Wipe Account Data
+                </button>
+              </div>
+            </div>
+
+            <!-- Terminal -->
+            <div class="terminal-box" style="height: 180px; flex-shrink: 0; margin-top: 0;">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <div class="terminal-dot close"></div>
+                  <div class="terminal-dot minimize"></div>
+                  <div class="terminal-dot expand"></div>
+                </div>
+                <span>causal-ledger@webos: /dev/substrate</span>
+                <span style="font-size: 0.65rem; color: #10b981;">● active</span>
+              </div>
+              <div class="terminal-body" style="font-size: 0.75rem;">
+                <div class="terminal-line"><span class="terminal-prompt">[holo-apps-kernel]</span> initializing WebOS Control Panel terminal monitor...</div>
+                <div class="terminal-line"><span class="terminal-prompt">[holo-apps-kernel]</span> loading decentralized ActivityStreams event logs...</div>
+                
+                <template x-if="!activeWorkspace || rawEventStream.length === 0">
+                  <div class="terminal-line" style="color: var(--text-muted);">No transaction logs recorded. Select a Workspace to display ActivityStreams JSON-LD stream.</div>
+                </template>
+                
+                <template x-for="jsonStr in rawEventStream" :key="jsonStr">
+                  <pre style="color: #a855f7; margin-bottom: 8px; font-size: 0.7rem;" x-text="jsonStr"></pre>
+                </template>
+              </div>
+            </div>
+          </div>
+          
+          <button class="btn btn-secondary" style="width: 100%;" @click="showDiagnosticsModal = false">Close Diagnostics</button>
         </div>
       </div>
     </template>
