@@ -962,7 +962,9 @@ impl Console {
         // TX: every frame this peer wants to send goes onto the data channel.
         if link.is_open() {
             while let Some(frame) = self.content.outbound() {
-                link.send(&frame)?;
+                if link.send(&frame).is_err() {
+                    break;
+                }
                 moved += 1;
             }
         }

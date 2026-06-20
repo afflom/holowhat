@@ -304,7 +304,15 @@ impl WebRtcLink {
     /// Whether the data channel is open and ready to carry frames.
     #[must_use]
     pub fn is_open(&self) -> bool {
-        self.shared.borrow().open
+        let s = self.shared.borrow();
+        if !s.open {
+            return false;
+        }
+        if let Some(ch) = &s.channel {
+            ch.ready_state() == web_sys::RtcDataChannelState::Open
+        } else {
+            false
+        }
     }
 
     /// Send a content-network frame to the peer over the data channel. The pump
@@ -314,7 +322,12 @@ impl WebRtcLink {
     pub fn send(&self, frame: &[u8]) -> Result<(), JsValue> {
         let s = self.shared.borrow();
         match s.channel.as_ref() {
-            Some(ch) => ch.send_with_u8_array(frame),
+            Some(ch) => {
+                if ch.ready_state() != web_sys::RtcDataChannelState::Open {
+                    return Err(JsValue::from_str("data channel not open"));
+                }
+                ch.send_with_u8_array(frame)
+            }
             None => Err(JsValue::from_str("data channel not open")),
         }
     }

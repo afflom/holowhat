@@ -48,7 +48,7 @@ features = [
     "RtcPeerConnection", "RtcConfiguration", "RtcDataChannel", "RtcDataChannelInit",
     "RtcDataChannelType", "RtcDataChannelEvent", "RtcSessionDescription",
     "RtcSessionDescriptionInit", "RtcSdpType", "RtcIceCandidate",
-    "RtcIceCandidateInit", "RtcPeerConnectionIceEvent",
+    "RtcIceCandidateInit", "RtcPeerConnectionIceEvent", "RtcDataChannelState",
 ]
 
 [profile.release]
