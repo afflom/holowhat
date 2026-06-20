@@ -2224,6 +2224,10 @@ function __wbg_get_imports() {
             const ret = arg0.read(getArrayU8FromWasm0(arg1, arg2), arg3);
             return ret;
         }, arguments); },
+        __wbg_readyState_d73973ea8c4d5d6e: function(arg0) {
+            const ret = arg0.readyState;
+            return (__wbindgen_enum_RtcDataChannelState.indexOf(ret) + 1 || 5) - 1;
+        },
         __wbg_resolve_d82363d90af6928a: function(arg0) {
             const ret = Promise.resolve(arg0);
             return ret;
@@ -2347,22 +2351,22 @@ function __wbg_get_imports() {
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 94, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff);
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h418a71938b185456);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("MessageEvent")], shim_idx: 94, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_2);
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h418a71938b185456_2);
             return ret;
         },
         __wbindgen_cast_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("RTCDataChannelEvent")], shim_idx: 94, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_3);
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h418a71938b185456_3);
             return ret;
         },
         __wbindgen_cast_0000000000000005: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("RTCPeerConnectionIceEvent")], shim_idx: 94, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_4);
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h418a71938b185456_4);
             return ret;
         },
         __wbindgen_cast_0000000000000006: function(arg0) {
@@ -2391,20 +2395,20 @@ function __wbg_get_imports() {
     };
 }
 
-function wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h418a71938b185456(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h418a71938b185456(arg0, arg1, arg2);
 }
 
-function wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_2(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_2(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h418a71938b185456_2(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h418a71938b185456_2(arg0, arg1, arg2);
 }
 
-function wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_3(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_3(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h418a71938b185456_3(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h418a71938b185456_3(arg0, arg1, arg2);
 }
 
-function wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_4(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h91e8d9b1aab282ff_4(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h418a71938b185456_4(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h418a71938b185456_4(arg0, arg1, arg2);
 }
 
 function wasm_bindgen__convert__closures_____invoke__hdd0d1cf3b7af404a(arg0, arg1, arg2) {
@@ -2420,6 +2424,9 @@ function wasm_bindgen__convert__closures_____invoke__h73aa05d7acb2a679(arg0, arg
 
 
 const __wbindgen_enum_BinaryType = ["blob", "arraybuffer"];
+
+
+const __wbindgen_enum_RtcDataChannelState = ["connecting", "open", "closing", "closed"];
 
 
 const __wbindgen_enum_RtcDataChannelType = ["arraybuffer", "blob"];
