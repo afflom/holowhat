@@ -703,6 +703,32 @@ export class Collection {
       localCaps.set(genesis.header.author, ["read", "write", "admin"]);
     }
 
+    // Check if this collection is a channel owned by a workspace
+    if (typeof window !== "undefined" && window.shellInstance && window.shellInstance.workspaces) {
+      for (const ws of window.shellInstance.workspaces) {
+        if (ws.channels && ws.channels.some(ch => ch.id === this.id)) {
+          // Grant read/write capabilities to all workspace members
+          if (ws.members) {
+            for (const mId of ws.members) {
+              if (!localCaps.has(mId)) {
+                localCaps.set(mId, ["read", "write"]);
+              }
+            }
+          }
+          // The workspace creator/admin gets admin in the channel too
+          if (ws.collection) {
+            const wsCaps = ws.collection.computeCapabilitiesAt(Array.from(ws.collection.heads));
+            for (const [mId, caps] of wsCaps.entries()) {
+              if (caps.includes("admin")) {
+                localCaps.set(mId, ["read", "write", "admin"]);
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+
     for (const ev of sorted) {
       if (ev.header.kind === "membership") {
         const payload = ev.body.cleartext || ev.decodedPayload;
@@ -711,6 +737,14 @@ export class Collection {
             localCaps.set(payload.target, payload.capabilities || ["read", "write"]);
           } else if (payload.action === "revoke") {
             localCaps.delete(payload.target);
+          }
+        }
+      } else if (ev.header.kind === "add-member") {
+        const payload = ev.body.cleartext || ev.decodedPayload;
+        if (payload && payload.object && payload.object.type === "Person") {
+          const personId = payload.object.id;
+          if (personId) {
+            localCaps.set(personId, payload.object.capabilities || ["read", "write"]);
           }
         }
       }
