@@ -51,7 +51,7 @@ export class StandardsValidator {
         }
       }
       
-      const allowedExtensions = ["curveId", "channels", "members", "attachment", "inReplyTo", "capabilities", "writePolicy"];
+      const allowedExtensions = ["curveId", "channels", "members", "attachment", "inReplyTo", "capabilities", "writePolicy", "startTime", "endTime", "summary", "mediaType", "contentUrl", "callStatus", "sessionType", "peerId", "installedApps", "contacts", "apps", "pools", "privacy", "callee", "caller"];
       if (!isDefined && !allowedExtensions.includes(key)) {
         throw new Error(`Property '${key}' in ${name} is not defined in the imported standards context schema!`);
       }
