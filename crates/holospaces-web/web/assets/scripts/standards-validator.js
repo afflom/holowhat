@@ -58,7 +58,7 @@ export class StandardsValidator {
 
   static validateActivityStreams(payload, expectedType) {
     if (!this.asContext) {
-      console.warn("StandardsValidator: Context not loaded yet, skipping runtime validation.");
+      console.log("StandardsValidator: Context not loaded yet, skipping runtime validation.");
       return;
     }
     if (payload["@context"] !== "https://www.w3.org/ns/activitystreams") {

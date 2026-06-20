@@ -63,6 +63,7 @@ server.listen(PORT, async () => {
     const page = await browser.newPage();
     
     const pageErrors = [];
+    const pageWarnings = [];
     const failedRequests = [];
 
     let lastPromptValue = "";
@@ -86,7 +87,16 @@ server.listen(PORT, async () => {
       }
     });
 
-    page.on("console", msg => console.log(`BROWSER [${msg.type()}]:`, msg.text()));
+    page.on("console", msg => {
+      const type = msg.type();
+      const text = msg.text();
+      console.log(`BROWSER [${type}]:`, text);
+      if (type === "error") {
+        pageErrors.push(new Error(`Console error: ${text}`));
+      } else if (type === "warning") {
+        pageWarnings.push(new Error(`Console warning: ${text}`));
+      }
+    });
     
     page.on("pageerror", err => {
       console.error("BROWSER ERROR:", err.message);
@@ -401,7 +411,10 @@ server.listen(PORT, async () => {
     
     // Check if any errors occurred during E2E flow
     if (pageErrors.length > 0) {
-      throw new Error(`Browser encountered ${pageErrors.length} uncaught exceptions: ${pageErrors.map(e => e.message).join(", ")}`);
+      throw new Error(`Browser encountered ${pageErrors.length} uncaught exceptions or console errors: ${pageErrors.map(e => e.message).join(", ")}`);
+    }
+    if (pageWarnings.length > 0) {
+      throw new Error(`Browser encountered ${pageWarnings.length} console warnings: ${pageWarnings.map(e => e.message).join(", ")}`);
     }
     if (failedRequests.length > 0) {
       throw new Error(`Browser encountered ${failedRequests.length} local resource load failures: ${failedRequests.map(r => `${r.url} (status: ${r.status || 'failed'})`).join(", ")}`);

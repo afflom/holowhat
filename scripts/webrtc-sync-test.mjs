@@ -69,8 +69,41 @@ server.listen(PORT, async () => {
     const alicePage = await contextAlice.newPage();
     const bobPage = await contextBob.newPage();
     
-    alicePage.on("console", msg => console.log(`ALICE BROWSER:`, msg.text()));
-    bobPage.on("console", msg => console.log(`BOB BROWSER:`, msg.text()));
+    const aliceErrors = [];
+    const aliceWarnings = [];
+    const bobErrors = [];
+    const bobWarnings = [];
+
+    alicePage.on("console", msg => {
+      const type = msg.type();
+      const text = msg.text();
+      console.log(`ALICE BROWSER [${type}]:`, text);
+      if (type === "error") {
+        aliceErrors.push(new Error(`Console error: ${text}`));
+      } else if (type === "warning") {
+        aliceWarnings.push(new Error(`Console warning: ${text}`));
+      }
+    });
+
+    bobPage.on("console", msg => {
+      const type = msg.type();
+      const text = msg.text();
+      console.log(`BOB BROWSER [${type}]:`, text);
+      if (type === "error") {
+        bobErrors.push(new Error(`Console error: ${text}`));
+      } else if (type === "warning") {
+        bobWarnings.push(new Error(`Console warning: ${text}`));
+      }
+    });
+
+    alicePage.on("pageerror", err => {
+      console.error("ALICE BROWSER ERROR:", err.message);
+      aliceErrors.push(err);
+    });
+    bobPage.on("pageerror", err => {
+      console.error("BOB BROWSER ERROR:", err.message);
+      bobErrors.push(err);
+    });
 
     // 1. Go to login pages (redirects automatically to worlds)
     console.log("Navigating Alice to login...");
@@ -155,6 +188,20 @@ server.listen(PORT, async () => {
     console.log("Waiting for Bob's replicated world component to load...");
     await bobPage.locator("world-block >> .world").waitFor({ timeout: 15000 });
     console.log("✓ Bob successfully replicated and rendered the world document!");
+
+    // Check for any console exceptions or warnings
+    if (aliceErrors.length > 0) {
+      throw new Error(`Alice page errors: ${aliceErrors.map(e => e.message).join(", ")}`);
+    }
+    if (aliceWarnings.length > 0) {
+      throw new Error(`Alice page warnings: ${aliceWarnings.map(e => e.message).join(", ")}`);
+    }
+    if (bobErrors.length > 0) {
+      throw new Error(`Bob page errors: ${bobErrors.map(e => e.message).join(", ")}`);
+    }
+    if (bobWarnings.length > 0) {
+      throw new Error(`Bob page warnings: ${bobWarnings.map(e => e.message).join(", ")}`);
+    }
 
     console.log("decentralization E2E WebRTC sync test PASSED successfully!");
     process.exitCode = 0;

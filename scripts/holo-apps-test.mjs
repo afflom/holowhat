@@ -490,6 +490,16 @@ async function runTests() {
     const decodedLink3 = base64Decode(inviteLinkHash);
     assert.strictEqual(decodedLink3, originalText, "Base64 decoding must extract payload from hash parameters");
 
+    // Test Case 8: Invalid base64 characters (e.g. %, @, etc.) that would make standard atob fail
+    const invalidB64 = "!!!invalid-base64-character-values-%%%@@@";
+    const decodedInvalid = base64Decode(invalidB64);
+    assert.strictEqual(decodedInvalid, "", "Invalid base64 characters must decode to empty string without throwing");
+
+    // Test Case 9: Non-JSON payload base64 string
+    const nonJsonB64 = base64Encode("Not a JSON object");
+    const decodedNonJson = base64Decode(nonJsonB64);
+    assert.strictEqual(decodedNonJson, "Not a JSON object", "Non-JSON base64 string must decode cleanly");
+
     console.log("✓ Robust Base64 Decoder validation PASSED");
 
     // 10. StandardsValidator ESM Module Verification

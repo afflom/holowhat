@@ -69,11 +69,33 @@ server.listen(PORT, async () => {
     const alicePage = await contextAlice.newPage();
     const bobPage = await contextBob.newPage();
     
-    alicePage.on("console", msg => console.log(`ALICE BROWSER:`, msg.text()));
-    bobPage.on("console", msg => console.log(`BOB BROWSER:`, msg.text()));
-
     const aliceErrors = [];
+    const aliceWarnings = [];
     const bobErrors = [];
+    const bobWarnings = [];
+
+    alicePage.on("console", msg => {
+      const type = msg.type();
+      const text = msg.text();
+      console.log(`ALICE BROWSER [${type}]:`, text);
+      if (type === "error") {
+        aliceErrors.push(new Error(`Console error: ${text}`));
+      } else if (type === "warning") {
+        aliceWarnings.push(new Error(`Console warning: ${text}`));
+      }
+    });
+
+    bobPage.on("console", msg => {
+      const type = msg.type();
+      const text = msg.text();
+      console.log(`BOB BROWSER [${type}]:`, text);
+      if (type === "error") {
+        bobErrors.push(new Error(`Console error: ${text}`));
+      } else if (type === "warning") {
+        bobWarnings.push(new Error(`Console warning: ${text}`));
+      }
+    });
+
     alicePage.on("pageerror", err => {
       console.error("ALICE BROWSER ERROR:", err.message);
       aliceErrors.push(err);
@@ -278,12 +300,18 @@ server.listen(PORT, async () => {
     await aliceReplyText.waitFor({ timeout: 15000 });
     console.log("✓ Alice successfully decrypted and read Bob's reply!");
 
-    // Check for any console exceptions
+    // Check for any console exceptions or warnings
     if (aliceErrors.length > 0) {
       throw new Error(`Alice page errors: ${aliceErrors.map(e => e.message).join(", ")}`);
     }
+    if (aliceWarnings.length > 0) {
+      throw new Error(`Alice page warnings: ${aliceWarnings.map(e => e.message).join(", ")}`);
+    }
     if (bobErrors.length > 0) {
       throw new Error(`Bob page errors: ${bobErrors.map(e => e.message).join(", ")}`);
+    }
+    if (bobWarnings.length > 0) {
+      throw new Error(`Bob page warnings: ${bobWarnings.map(e => e.message).join(", ")}`);
     }
 
     console.log("🎉 Holo-Apps Peer Synchronization & Secure Messaging E2E test PASSED successfully!");

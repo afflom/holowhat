@@ -498,7 +498,7 @@ export class Collection {
     // Verify parents are already imported (causality check)
     for (const parentId of event.header.parents) {
       if (!this.events.has(parentId)) {
-        console.warn(`Collection ${this.id}: Missing causal parent ${parentId} for event ${event.id}`);
+        console.log(`Collection ${this.id}: Missing causal parent ${parentId} for event ${event.id}`);
         return false;
       }
     }
