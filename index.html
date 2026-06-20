@@ -394,8 +394,8 @@
                   <!-- Online Peers Nearby Discovery section (Human-Centered) -->
                   <div class="nearby-peers-section">
                     <h4 style="font-weight: 700; font-size: 0.85rem; text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                      <div class="status-dot"></div>
-                      <span>Online Nearby Peers Discovered (Local Swarm)</span>
+                      <div class="status-dot" :style="{ background: isWebRtcConnected ? 'var(--success)' : 'var(--error)', boxShadow: isWebRtcConnected ? '0 0 8px var(--success)' : '0 0 8px var(--error)' }"></div>
+                      <span x-text="isWebRtcConnected ? 'Online Nearby Peers Discovered (Local Swarm)' : 'Nearby Peers (Offline)'">Online Nearby Peers Discovered (Local Swarm)</span>
                     </h4>
                     <div class="peer-list" x-show="discoveredPeers.length > 0">
                       <template x-for="peer in discoveredPeers" :key="peer.id">
@@ -412,7 +412,7 @@
                       </template>
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); padding: 8px 0;" x-show="discoveredPeers.length === 0">
-                      Scanning local swarm link for active peers online...
+                      <span x-text="isWebRtcConnected ? 'Scanning local swarm link for active peers online...' : 'Connect to a peer via WebRTC to start scanning nearby peers.'">Scanning local swarm link for active peers online...</span>
                     </div>
                   </div>
                   
