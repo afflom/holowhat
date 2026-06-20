@@ -524,10 +524,6 @@ Alpine.data("playground", () => {
                   const dataArray = Array.from(resolvedBytes);
                   const dataJson = JSON.stringify(dataArray);
                   localStorage.setItem("hs-doc-data:" + kappa, dataJson);
-                  localStorage.setItem("hs-doc-data:document/" + docUrl, dataJson);
-                  localStorage.setItem("hs-doc-data:" + docUrl + "/snapshot/bootstrap", dataJson);
-                  localStorage.setItem("hs-doc-kappa:document/" + docUrl, kappa);
-                  localStorage.setItem("hs-doc-kappa:" + docUrl, kappa);
                   
                   if (handle && isAutomerge) {
                     try {
@@ -539,8 +535,15 @@ Alpine.data("playground", () => {
                     } catch (e) {
                       console.error("Failed to merge remote document:", e);
                     }
+                  } else if (isAutomerge) {
+                    // Populate document keys for initial boot of repository handle
+                    localStorage.setItem("hs-doc-data:document/" + docUrl, dataJson);
+                    localStorage.setItem("hs-doc-data:" + docUrl + "/snapshot/bootstrap", dataJson);
+                    localStorage.setItem("hs-doc-kappa:document/" + docUrl, kappa);
+                    localStorage.setItem("hs-doc-kappa:" + docUrl, kappa);
+                    console.log("Downloaded document bytes. Storage populated.");
                   } else {
-                    console.log("Downloaded document/metadata bytes. Storage populated.");
+                    console.log("Downloaded metadata bytes. Storage populated.");
                   }
                 }
               }
