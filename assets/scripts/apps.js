@@ -278,6 +278,17 @@ setInterval(async () => {
               shell.saveChannelReference(chId, ev.body.cleartext.name);
               shell.saveEventToStorage(ev);
               console.log("WebRTC: Discovered channel genesis:", chId, ev.body.cleartext.name);
+              
+              let ch = shell.channels.find(c => c.id === chId);
+              if (!ch && shell.activeWorkspace) {
+                ch = shell.activeWorkspace.channels.find(c => c.id === chId);
+              }
+              if (ch && ch.collection) {
+                const added = await ch.collection.addEvent(ev);
+                if (added) {
+                  await handleSuccessfulEventAdd(ch.collection, ev, false, chId, false);
+                }
+              }
               continue;
             }
             
@@ -1170,6 +1181,100 @@ Alpine.data("shell", () => {
       this.activeWorkspace.members = state.members;
       
       alert("Member added to workspace!");
+    },
+
+    async promoteWorkspaceMember(memberId) {
+      if (!this.activeWorkspace) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+      const addEvent = await Event.create({
+        kind: "add-member",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Add",
+          "object": {
+            "type": "Person",
+            "id": memberId,
+            "capabilities": ["read", "write", "admin"]
+          },
+          "target": {
+            "type": "Group",
+            "id": wsCol.id
+          }
+        }
+      }, this.participant);
+      
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(addEvent.body.payload || addEvent.body.cleartext, "Add");
+      } catch (err) {
+        console.error("Standards compliance check failed on promote workspace member event:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
+
+      await wsCol.addEvent(addEvent);
+      this.saveEventToStorage(addEvent);
+      
+      const state = await wsCol.render();
+      this.activeWorkspace.members = state.members;
+      alert("Member promoted to Workspace Admin!");
+    },
+
+    async demoteWorkspaceMember(memberId) {
+      if (!this.activeWorkspace) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+      const addEvent = await Event.create({
+        kind: "add-member",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Add",
+          "object": {
+            "type": "Person",
+            "id": memberId,
+            "capabilities": ["read", "write"]
+          },
+          "target": {
+            "type": "Group",
+            "id": wsCol.id
+          }
+        }
+      }, this.participant);
+      
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(addEvent.body.payload || addEvent.body.cleartext, "Add");
+      } catch (err) {
+        console.error("Standards compliance check failed on demote workspace member event:", err.message);
+        alert(`Standards compliance check failed: ${err.message}`);
+        return;
+      }
+
+      await wsCol.addEvent(addEvent);
+      this.saveEventToStorage(addEvent);
+      
+      const state = await wsCol.render();
+      this.activeWorkspace.members = state.members;
+      alert("Member demoted to Workspace Member!");
     },
 
     selectWorkspace(ws) {

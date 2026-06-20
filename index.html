@@ -211,12 +211,23 @@
                         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
                           <template x-for="mId in activeWorkspace.members" :key="mId">
                             <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.01); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);">
-                              <span style="font-family: monospace; font-size: 0.85rem;" x-text="mId === (participant ? participant.id : '') ? 'You (' + mId.substring(0, 16) + '...)' : mId.substring(0, 16) + '...'"></span>
-                              <template x-if="mId !== (participant ? participant.id : '')">
-                                <div>
-                                  <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 2px 8px;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0,6)); alert('Member added to your Default contacts!')">Add to Contacts</button>
+                              <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <span style="font-family: monospace; font-size: 0.85rem;" x-text="mId === (participant ? participant.id : '') ? 'You (' + mId.substring(0, 16) + '...)' : mId.substring(0, 16) + '...'"></span>
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                  <span style="font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); color: var(--text-muted);"
+                                        x-text="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? 'Admin' : 'Member'">
+                                  </span>
                                 </div>
-                              </template>
+                              </div>
+                              <div style="display: flex; gap: 6px;">
+                                <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 2px 8px;" @click="discoverContact(mId, '', 'Member ' + mId.substring(0,6)); alert('Member added to your Default contacts!')">Add to Contacts</button>
+                                <template x-if="mId !== (participant ? participant.id : '') && activeWorkspace.collection.capabilities.get(participant.id)?.includes('admin')">
+                                  <button class="btn" style="font-size: 0.75rem; padding: 2px 8px; background: var(--accent); border-color: rgba(99,102,241,0.2);"
+                                          @click="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? demoteWorkspaceMember(mId) : promoteWorkspaceMember(mId)"
+                                          x-text="activeWorkspace.collection.capabilities.get(mId)?.includes('admin') ? 'Demote' : 'Promote'">
+                                  </button>
+                                </template>
+                              </div>
                             </div>
                           </template>
                         </div>

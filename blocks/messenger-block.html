@@ -196,7 +196,13 @@
             <div class="member-actions-row" style="display: flex; gap: 4px; margin-top: 6px;">
               <button class="inspect-did-btn" @click="inspectDid(m.id)">Inspect DID</button>
               <template x-if="m.id !== getShell().participant.id && (getCollection()?.capabilities?.get(getShell().participant.id) || []).includes('admin')">
-                <button class="revoke-member-btn" @click="revoke(m.id)">Revoke</button>
+                <div style="display: flex; gap: 4px;">
+                  <button class="revoke-member-btn" @click="revoke(m.id)">Revoke</button>
+                  <button class="revoke-member-btn" style="background: var(--accent); border-color: rgba(99,102,241,0.2);"
+                          @click="m.capabilities.includes('admin') ? demote(m.id) : promote(m.id)"
+                          x-text="m.capabilities.includes('admin') ? 'Demote' : 'Promote'">
+                  </button>
+                </div>
               </template>
             </div>
           </div>
@@ -602,14 +608,22 @@
         return;
       }
 
+      let epochId = "genesis";
+      let epochKey = null;
+      if (col.currentEpochId && col.currentEpochId !== "genesis") {
+        epochId = col.currentEpochId;
+        epochKey = col.epochKeys.get(epochId) || null;
+      }
+
       const ev = await Event.create({
         kind: "message",
         author: p.id,
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
+        epochId,
         payload
-      }, p);
+      }, p, epochKey);
 
       const added = await col.addEvent(ev);
       if (added) {
@@ -648,19 +662,27 @@
         if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
       }
 
+      let epochId = "genesis";
+      let epochKey = null;
+      if (col.currentEpochId && col.currentEpochId !== "genesis") {
+        epochId = col.currentEpochId;
+        epochKey = col.epochKeys.get(epochId) || null;
+      }
+
       const ev = await Event.create({
         kind: "reaction",
         author: p.id,
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
+        epochId,
         payload: {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Like",
           "object": msg.id,
           "content": symbol
         }
-      }, p);
+      }, p, epochKey);
 
       // Runtime W3C Standards Conformance Check
       try {
@@ -699,12 +721,20 @@
         if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
       }
 
+      let epochId = "genesis";
+      let epochKey = null;
+      if (col.currentEpochId && col.currentEpochId !== "genesis") {
+        epochId = col.currentEpochId;
+        epochKey = col.epochKeys.get(epochId) || null;
+      }
+
       const ev = await Event.create({
         kind: "edit",
         author: p.id,
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
+        epochId,
         payload: {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Update",
@@ -714,7 +744,7 @@
             "content": this.editText
           }
         }
-      }, p);
+      }, p, epochKey);
 
       // Runtime W3C Standards Conformance Check
       try {
@@ -749,12 +779,20 @@
         if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
       }
 
+      let epochId = "genesis";
+      let epochKey = null;
+      if (col.currentEpochId && col.currentEpochId !== "genesis") {
+        epochId = col.currentEpochId;
+        epochKey = col.epochKeys.get(epochId) || null;
+      }
+
       const ev = await Event.create({
         kind: "delete",
         author: p.id,
         collectionId: col.id,
         parents,
         clock: maxClock + 1,
+        epochId,
         payload: {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Delete",
@@ -763,7 +801,7 @@
             "id": msg.id
           }
         }
-      }, p);
+      }, p, epochKey);
 
       // Runtime W3C Standards Conformance Check
       try {
@@ -998,6 +1036,90 @@
       col.currentEpochId = epochEvent.id;
 
       await this.refresh();
+    },
+
+    async promote(targetId) {
+      const col = this.getCollection();
+      if (!col) return;
+      const shell = this.getShell();
+      if (!shell) return;
+      const p = shell.participant;
+      const myCaps = col.capabilities.get(p.id) || [];
+      if (!myCaps.includes("admin")) {
+        alert("Only admins can change permissions.");
+        return;
+      }
+      const targetMember = col.members.get(targetId);
+      const targetCurveId = targetMember ? targetMember.curveId : "";
+
+      const parents = Array.from(col.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const grantEvent = await Event.create({
+        kind: "membership",
+        author: p.id,
+        collectionId: col.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          target: targetId,
+          action: "grant",
+          capabilities: ["read", "write", "admin"],
+          curveId: targetCurveId
+        }
+      }, p);
+
+      const added = await col.addEvent(grantEvent);
+      if (added) {
+        this.saveEventOnShell(shell, grantEvent);
+        await this.refresh();
+      }
+    },
+
+    async demote(targetId) {
+      const col = this.getCollection();
+      if (!col) return;
+      const shell = this.getShell();
+      if (!shell) return;
+      const p = shell.participant;
+      const myCaps = col.capabilities.get(p.id) || [];
+      if (!myCaps.includes("admin")) {
+        alert("Only admins can change permissions.");
+        return;
+      }
+      const targetMember = col.members.get(targetId);
+      const targetCurveId = targetMember ? targetMember.curveId : "";
+
+      const parents = Array.from(col.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const grantEvent = await Event.create({
+        kind: "membership",
+        author: p.id,
+        collectionId: col.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          target: targetId,
+          action: "grant",
+          capabilities: ["read", "write"],
+          curveId: targetCurveId
+        }
+      }, p);
+
+      const added = await col.addEvent(grantEvent);
+      if (added) {
+        this.saveEventOnShell(shell, grantEvent);
+        await this.refresh();
+      }
     }
   }
 </script>
