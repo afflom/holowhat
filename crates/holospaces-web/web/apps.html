@@ -551,6 +551,13 @@
           <h2>Create New Channel</h2>
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <input type="text" class="input" placeholder="Channel Name" x-model="newChannelName" />
+            <div style="display: flex; flex-direction: column; gap: 4px; text-align: left;">
+              <label style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;">Who can post messages:</label>
+              <select x-model="newChannelWritePolicy" class="input" style="background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); padding: 8px; border-radius: 4px; font-size: 0.85rem; cursor: pointer;">
+                <option value="all" style="background: #1e293b;">Everyone (Workspace Members)</option>
+                <option value="creator" style="background: #1e293b;">Only Channel Creator</option>
+              </select>
+            </div>
             <div style="display: flex; gap: 8px;">
               <button class="btn" @click="createChannel()" :disabled="!newChannelName">Create</button>
               <button class="btn btn-secondary" @click="showCreateChannelModal = false">Cancel</button>

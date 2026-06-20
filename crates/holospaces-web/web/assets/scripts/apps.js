@@ -279,6 +279,9 @@ setInterval(async () => {
                 if (!savedRefs.some(w => w.id === wsId)) {
                   savedRefs.push({ id: wsId, name: ev.body.cleartext.name });
                   localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+                  if (shell.configCollection) {
+                    await shell.writeConfigUpdate({ workspaces: savedRefs });
+                  }
                 }
                 
                 const state = await col.render();
@@ -487,6 +490,7 @@ Alpine.data("shell", () => {
     privateKeyHexInput: "",
     newWorkspaceName: "",
     newChannelName: "",
+    newChannelWritePolicy: "all",
     newContactAlias: "",
     newContactId: "",
     newContactCurveId: "",
@@ -955,7 +959,8 @@ Alpine.data("shell", () => {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "published": new Date().toISOString()
+          "published": new Date().toISOString(),
+          "writePolicy": "all"
         }
       }, this.participant);
       genChanGenesis.header.collection = genChanGenesis.id;
@@ -1022,7 +1027,8 @@ Alpine.data("shell", () => {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": "general",
-          "published": new Date().toISOString()
+          "published": new Date().toISOString(),
+          "writePolicy": "all"
         }
       }, this.participant);
 
@@ -1117,7 +1123,8 @@ Alpine.data("shell", () => {
           "@context": "https://www.w3.org/ns/activitystreams",
           "type": "Conversation",
           "name": this.newChannelName,
-          "published": new Date().toISOString()
+          "published": new Date().toISOString(),
+          "writePolicy": this.newChannelWritePolicy
         }
       }, this.participant);
 
@@ -1194,6 +1201,7 @@ Alpine.data("shell", () => {
       this.channels = this.activeWorkspace.channels;
 
       this.newChannelName = "";
+      this.newChannelWritePolicy = "all";
       this.showCreateChannelModal = false;
     },
 
