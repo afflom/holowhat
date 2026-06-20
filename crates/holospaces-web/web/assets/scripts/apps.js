@@ -1,5 +1,5 @@
 import Alpine from "./alpine-fork.js";
-import { Participant, Event, Collection, App, AppIndex, Shell, canonicalJson, sha256, HoloAppsCrypto, base64Encode, base64Decode } from "./holo-apps.js";
+import { Participant, Event, Collection, App, AppIndex, Shell, canonicalJson, sha256, HoloAppsCrypto, base64Encode, base64Decode, encryptPayload, decryptPayload } from "./holo-apps.js";
 import { messengerReducer, createMessengerApp } from "./holo-messenger.js";
 import init, { Console, WebRtcLink } from "../../../pkg/holospaces_web.js";
 
@@ -78,6 +78,12 @@ function announceAllWorkspaceEvents() {
 
   const toAnnounce = [];
   
+  if (shell.configCollection) {
+    for (const ev of shell.configCollection.events.values()) {
+      toAnnounce.push(ev);
+    }
+  }
+  
   if (shell.activeWorkspace) {
     for (const ev of shell.activeWorkspace.collection.events.values()) {
       toAnnounce.push(ev);
@@ -120,7 +126,7 @@ function announceAllWorkspaceEvents() {
 // Periodic content discovery: check if remote peer has announced new states
 const pendingEvents = [];
 
-async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId) {
+async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId, isConfig = false) {
   const shell = window.shellInstance;
   if (!shell) return;
   shell.saveEventToStorage(ev);
@@ -129,7 +135,20 @@ async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId) {
     await col.unwrapAndStoreEpochKey(ev, shell.participant);
   }
   
-  if (isWorkspace) {
+  if (isConfig) {
+    const configState = await col.render();
+    shell.installedAppIds = configState.installedApps || [];
+    shell.contacts = configState.contacts || [];
+    shell.contactPools = configState.contactPools || [];
+    shell.workspacesRefs = configState.workspaces || [];
+    
+    localStorage.setItem("holoapps_installed_apps", JSON.stringify(shell.installedAppIds));
+    localStorage.setItem("holoapps_contacts", JSON.stringify(shell.contacts));
+    localStorage.setItem("holoapps_contact_pools", JSON.stringify(shell.contactPools));
+    localStorage.setItem("holoapps_workspaces", JSON.stringify(shell.workspacesRefs));
+    
+    await shell.loadWorkspaces();
+  } else if (isWorkspace) {
     const state = await col.render();
     const ws = shell.workspaces.find(w => w.id === colId);
     if (ws) {
@@ -168,7 +187,7 @@ async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId) {
           pendingEvents.splice(i, 1);
           i--; // adjust index
           progress = true;
-          await handleSuccessfulEventAdd(p.col, p.ev, p.isWorkspace, p.colId);
+          await handleSuccessfulEventAdd(p.col, p.ev, p.isWorkspace, p.colId, p.isConfig);
         }
       }
     }
@@ -265,8 +284,12 @@ setInterval(async () => {
             // 3. Regular event, find collection
             let col = null;
             let isWorkspace = false;
+            let isConfig = false;
             
-            if (shell.activeWorkspace && shell.activeWorkspace.id === colId) {
+            if (shell.configCollection && shell.configCollection.id === colId) {
+              col = shell.configCollection;
+              isConfig = true;
+            } else if (shell.activeWorkspace && shell.activeWorkspace.id === colId) {
               col = shell.activeWorkspace.collection;
               isWorkspace = true;
             } else {
@@ -301,12 +324,12 @@ setInterval(async () => {
             if (col) {
               const added = await col.addEvent(ev);
               if (added) {
-                await handleSuccessfulEventAdd(col, ev, isWorkspace, colId);
+                await handleSuccessfulEventAdd(col, ev, isWorkspace, colId, isConfig);
               } else {
                 // If it failed to add (due to causal dependency missing), queue it for retry
                 if (!pendingEvents.some(p => p.ev.id === ev.id)) {
                   console.log("WebRTC: Event missing parents, queued for retry:", ev.id, ev.header.kind);
-                  pendingEvents.push({ col, ev, isWorkspace, colId });
+                  pendingEvents.push({ col, ev, isWorkspace, colId, isConfig });
                 }
               }
             }
@@ -350,6 +373,35 @@ export function workspaceReducer(events) {
   return state;
 }
 
+export function configReducer(events) {
+  const state = {
+    installedApps: [],
+    contacts: [],
+    contactPools: [],
+    workspaces: []
+  };
+  if (!events || !Array.isArray(events)) return state;
+  for (const ev of events) {
+    if (!ev) continue;
+    const payload = ev.payload || (ev.body ? ev.body.payload : null) || ev.body?.cleartext || {};
+    const type = payload.type || "";
+    const eventKind = ev.kind || ev.header?.kind || "";
+    
+    if (eventKind === "genesis" || type === "config-genesis") {
+      state.installedApps = payload.installedApps || [];
+      state.contacts = payload.contacts || [];
+      state.contactPools = payload.contactPools || [];
+      state.workspaces = payload.workspaces || [];
+    } else if (type === "config-update") {
+      if (payload.installedApps !== undefined) state.installedApps = payload.installedApps;
+      if (payload.contacts !== undefined) state.contacts = payload.contacts;
+      if (payload.contactPools !== undefined) state.contactPools = payload.contactPools;
+      if (payload.workspaces !== undefined) state.workspaces = payload.workspaces;
+    }
+  }
+  return state;
+}
+
 Alpine.data("shell", () => {
   return {
     get rawEventStream() {
@@ -371,6 +423,7 @@ Alpine.data("shell", () => {
         });
     },
     participant: null,
+    configCollection: null,
     activeTab: "dashboard", // "dashboard", "apps", "channel", "contacts"
     installedAppIds: [],
     
@@ -443,21 +496,88 @@ Alpine.data("shell", () => {
     },
 
     async onIdentityReady() {
-      // 2. Load gateway app indexes
+      const configColId = this.participant.id + "-config";
+      this.configCollection = new Collection(configColId, configReducer);
+      
+      const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${configColId}`) || "[]");
+      for (const evId of eventIds) {
+        const raw = localStorage.getItem(`holoapps_event:${evId}`);
+        if (raw) {
+          try {
+            const evData = JSON.parse(raw);
+            const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+            await this.configCollection.addEvent(ev);
+          } catch(e) {}
+        }
+      }
+
       const mockManifest = await createMessengerApp(this.participant);
       this.indexApps = [mockManifest];
 
-      // 3. Load installed apps
-      this.installedAppIds = JSON.parse(localStorage.getItem("holoapps_installed_apps") || "[]");
-      if (this.installedAppIds.length === 0) {
-        this.installedAppIds.push(mockManifest.id);
-        localStorage.setItem("holoapps_installed_apps", JSON.stringify(this.installedAppIds));
+      if (this.configCollection.events.size === 0) {
+        const defaultPools = [
+          {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Collection",
+            "id": "pool:default",
+            "name": "Default"
+          },
+          {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Collection",
+            "id": "pool:work",
+            "name": "Work"
+          },
+          {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Collection",
+            "id": "pool:friends",
+            "name": "Friends"
+          }
+        ];
+        
+        const selfContact = {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Person",
+          "id": this.participant.id,
+          "name": "Me (Operator)",
+          "curveId": this.participant.curveId,
+          "pools": ["pool:default"]
+        };
+
+        const genesisEvent = await Event.create({
+          kind: "genesis",
+          author: this.participant.id,
+          collectionId: configColId,
+          payload: {
+            type: "config-genesis",
+            installedApps: [mockManifest.id],
+            contacts: [selfContact],
+            contactPools: defaultPools,
+            workspaces: []
+          }
+        }, this.participant);
+        
+        genesisEvent.header.collection = genesisEvent.id;
+        const signPayload = canonicalJson({ header: genesisEvent.header, body: genesisEvent.body });
+        genesisEvent.signature = await HoloAppsCrypto.sign(this.participant.signKeys.privateKey, signPayload);
+        genesisEvent.id = await sha256(signPayload);
+        
+        this.configCollection.id = genesisEvent.id;
+        await this.configCollection.addEvent(genesisEvent);
+        this.saveEventToStorage(genesisEvent);
       }
 
-      // 4. Load Contacts & Pools
-      await this.loadContactsAndPools();
+      const configState = await this.configCollection.render();
 
-      // 5. Load Workspaces (and channels)
+      this.installedAppIds = configState.installedApps;
+      this.contacts = configState.contacts;
+      this.contactPools = configState.contactPools;
+      
+      localStorage.setItem("holoapps_installed_apps", JSON.stringify(this.installedAppIds));
+      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      localStorage.setItem("holoapps_contact_pools", JSON.stringify(this.contactPools));
+
       await this.loadWorkspaces();
     },
 
@@ -475,7 +595,25 @@ Alpine.data("shell", () => {
 
     async loadExistingIdentity() {
       try {
-        const decoded = base64Decode(this.privateKeyHexInput.trim());
+        let payloadStr = this.privateKeyHexInput.trim();
+        let decoded = "";
+        if (payloadStr.startsWith("encrypted:")) {
+          const passphrase = prompt("This backup is encrypted. Please enter the passphrase to decrypt it:");
+          if (!passphrase) {
+            alert("Passphrase is required to import this account.");
+            return;
+          }
+          try {
+            decoded = await decryptPayload(payloadStr, passphrase);
+          } catch (err) {
+            console.error("Passphrase decryption failed:", err);
+            alert("Failed to decrypt account. Ensure the passphrase is correct.");
+            return;
+          }
+        } else {
+          decoded = base64Decode(payloadStr);
+        }
+
         if (!decoded) {
           alert("Failed to import account. Ensure you pasted a valid Account Backup Payload.");
           return;
@@ -505,8 +643,53 @@ Alpine.data("shell", () => {
     async installIndexApp(app) {
       if (!this.isAppInstalled(app.id)) {
         this.installedAppIds.push(app.id);
-        localStorage.setItem("holoapps_installed_apps", JSON.stringify(this.installedAppIds));
+        await this.writeConfigUpdate({ installedApps: this.installedAppIds });
         console.log("Installed app:", app.name);
+      }
+    },
+
+    async writeConfigUpdate(fields) {
+      if (!this.configCollection) return;
+      const p = this.participant;
+      const parents = Array.from(this.configCollection.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = this.configCollection.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const ev = await Event.create({
+        kind: "config-update",
+        author: p.id,
+        collectionId: this.configCollection.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          type: "config-update",
+          ...fields
+        }
+      }, p);
+
+      const added = await this.configCollection.addEvent(ev);
+      if (added) {
+        this.saveEventToStorage(ev);
+        const configState = await this.configCollection.render();
+        if (fields.installedApps !== undefined) {
+          this.installedAppIds = configState.installedApps;
+          localStorage.setItem("holoapps_installed_apps", JSON.stringify(this.installedAppIds));
+        }
+        if (fields.contacts !== undefined) {
+          this.contacts = configState.contacts;
+          localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+        }
+        if (fields.contactPools !== undefined) {
+          this.contactPools = configState.contactPools;
+          localStorage.setItem("holoapps_contact_pools", JSON.stringify(this.contactPools));
+        }
+        if (fields.workspaces !== undefined) {
+          this.workspacesRefs = configState.workspaces;
+          localStorage.setItem("holoapps_workspaces", JSON.stringify(this.workspacesRefs));
+        }
       }
     },
 
@@ -570,7 +753,7 @@ Alpine.data("shell", () => {
       };
       this.contacts = this.contacts.filter(c => c.id !== newPerson.id);
       this.contacts.push(newPerson);
-      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      this.writeConfigUpdate({ contacts: this.contacts });
       
       this.newContactId = "";
       this.newContactCurveId = "";
@@ -584,7 +767,7 @@ Alpine.data("shell", () => {
       if (exists) {
         if (curveId && exists.curveId !== curveId) {
           exists.curveId = curveId;
-          localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+          this.writeConfigUpdate({ contacts: this.contacts });
         }
         return;
       }
@@ -597,13 +780,13 @@ Alpine.data("shell", () => {
         "pools": ["pool:default"]
       };
       this.contacts.push(newPerson);
-      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      this.writeConfigUpdate({ contacts: this.contacts });
       console.log("Discovered contact automatically:", id);
     },
 
     deleteContact(contactId) {
       this.contacts = this.contacts.filter(c => c.id !== contactId);
-      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      this.writeConfigUpdate({ contacts: this.contacts });
     },
 
     createPool() {
@@ -615,7 +798,7 @@ Alpine.data("shell", () => {
         "name": this.newPoolName
       };
       this.contactPools.push(newPool);
-      localStorage.setItem("holoapps_contact_pools", JSON.stringify(this.contactPools));
+      this.writeConfigUpdate({ contactPools: this.contactPools });
       this.newPoolName = "";
       this.showCreatePoolModal = false;
     },
@@ -630,12 +813,23 @@ Alpine.data("shell", () => {
       } else {
         contact.pools.push(poolId);
       }
-      localStorage.setItem("holoapps_contacts", JSON.stringify(this.contacts));
+      this.writeConfigUpdate({ contacts: this.contacts });
     },
 
     // Workspaces
     async loadWorkspaces() {
-      const saved = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+      const prevActiveWorkspaceId = this.activeWorkspace?.id;
+      const prevActiveChannelId = this.activeChannel?.id;
+      const prevActiveTab = this.activeTab;
+
+      let saved = [];
+      if (this.configCollection) {
+        const configState = await this.configCollection.render();
+        saved = configState.workspaces || [];
+      }
+      if (!saved || saved.length === 0) {
+        saved = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+      }
       this.workspaces = [];
       
       for (const wsRef of saved) {
@@ -644,9 +838,11 @@ Alpine.data("shell", () => {
         for (const evId of eventIds) {
           const raw = localStorage.getItem(`holoapps_event:${evId}`);
           if (raw) {
-            const evData = JSON.parse(raw);
-            const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-            await col.addEvent(ev);
+            try {
+              const evData = JSON.parse(raw);
+              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+              await col.addEvent(ev);
+            } catch(e) {}
           }
         }
         
@@ -663,8 +859,22 @@ Alpine.data("shell", () => {
       if (this.workspaces.length === 0) {
         await this.bootstrapDefaultWorkspace();
       } else {
-        this.activeWorkspace = this.workspaces[0];
+        let targetWs = null;
+        if (prevActiveWorkspaceId) {
+          targetWs = this.workspaces.find(w => w.id === prevActiveWorkspaceId);
+        }
+        this.activeWorkspace = targetWs || this.workspaces[0];
         this.channels = this.activeWorkspace.channels;
+
+        if (prevActiveTab === "channel" && prevActiveChannelId) {
+          const targetCh = this.channels.find(c => c.id === prevActiveChannelId);
+          if (targetCh) {
+            await this.selectChannel(targetCh);
+          } else {
+            this.activeChannel = null;
+            this.activeTab = "dashboard";
+          }
+        }
       }
     },
 
@@ -712,9 +922,11 @@ Alpine.data("shell", () => {
       this.saveEventToStorage(wsGenesis);
 
       // Save references
-      const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
-      savedRefs.push({ id: wsGenesis.id, name: "Local Swarm" });
+      const savedRefs = [{ id: wsGenesis.id, name: "Local Swarm" }];
       localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+      if (this.configCollection) {
+        await this.writeConfigUpdate({ workspaces: savedRefs });
+      }
 
       const col = new Collection(wsGenesis.id, workspaceReducer);
       await col.addEvent(wsGenesis);
@@ -795,9 +1007,18 @@ Alpine.data("shell", () => {
       wsGenesis.id = await sha256(wsSignPayload);
       this.saveEventToStorage(wsGenesis);
 
-      const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+      const savedRefs = [];
+      if (this.configCollection) {
+        const configState = await this.configCollection.render();
+        savedRefs.push(...(configState.workspaces || []));
+      } else {
+        savedRefs.push(...JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]"));
+      }
       savedRefs.push({ id: wsGenesis.id, name: this.newWorkspaceName });
       localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+      if (this.configCollection) {
+        await this.writeConfigUpdate({ workspaces: savedRefs });
+      }
 
       const col = new Collection(wsGenesis.id, workspaceReducer);
       await col.addEvent(wsGenesis);
@@ -1056,10 +1277,19 @@ Alpine.data("shell", () => {
             }
           }
 
-          const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+          const savedRefs = [];
+          if (this.configCollection) {
+            const configState = await this.configCollection.render();
+            savedRefs.push(...(configState.workspaces || []));
+          } else {
+            savedRefs.push(...JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]"));
+          }
           if (!savedRefs.some(w => w.id === genesis.id)) {
             savedRefs.push({ id: genesis.id, name: payload.name || "Joined Workspace" });
             localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+            if (this.configCollection) {
+              await this.writeConfigUpdate({ workspaces: savedRefs });
+            }
           }
 
           const state = await col.render();
@@ -1219,7 +1449,14 @@ Alpine.data("shell", () => {
     async exportIdentity() {
       try {
         const jwkObj = await this.participant.exportJwk();
-        const serialized = base64Encode(JSON.stringify(jwkObj));
+        const cleartext = JSON.stringify(jwkObj);
+        const passphrase = prompt("Enter a passphrase to encrypt your account backup (leave blank to export unencrypted):");
+        let serialized = "";
+        if (passphrase) {
+          serialized = await encryptPayload(cleartext, passphrase);
+        } else {
+          serialized = base64Encode(cleartext);
+        }
         prompt("Copy this Complete Account Backup Payload:", serialized);
       } catch (e) {
         console.error(e);

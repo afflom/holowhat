@@ -68,5 +68,6 @@ jobs:
           node scripts/holo-apps-test.mjs
           node scripts/apps-peer-test.mjs
           node scripts/webrtc-sync-test.mjs
+          node scripts/behavioral-ux-test.mjs
 
 
