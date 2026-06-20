@@ -42,7 +42,13 @@ window.acceptPeerAnswer = async (answerSdp) => {
 // Periodic content network pump
 let linkWasOpen = false;
 setInterval(() => {
-  if (window.cnLink && window.cnLink.is_open()) {
+  const isOpen = !!(window.cnLink && window.cnLink.is_open());
+  const shell = window.shellInstance;
+  if (shell && shell.isWebRtcLinkOpen !== isOpen) {
+    shell.isWebRtcLinkOpen = isOpen;
+  }
+
+  if (isOpen) {
     console0.cn_pump(window.cnLink);
     if (!linkWasOpen) {
       linkWasOpen = true;
@@ -513,8 +519,9 @@ Alpine.data("shell", () => {
     webrtcAnswerCodeInput: '',
     webrtcOfferCodeInput: '',
     webrtcAnswerCode: '',
+    isWebRtcLinkOpen: false,
     get isWebRtcConnected() {
-      return !!(window.cnLink && window.cnLink.is_open());
+      return this.isWebRtcLinkOpen;
     },
     discoveredPeers: [],
     passPreview: null,
