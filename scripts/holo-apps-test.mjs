@@ -527,6 +527,15 @@ async function runTests() {
       }
     }, "Create");
 
+    // Test validation of valid ActivityStreams OfferCall activity
+    StandardsValidator.validateActivityStreams({
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "OfferCall",
+      "callee": "mock-callee-id",
+      "callStatus": "offered",
+      "published": new Date().toISOString()
+    }, "OfferCall");
+
     // Test validation failure on undefined context property
     try {
       StandardsValidator.validateActivityStreams({

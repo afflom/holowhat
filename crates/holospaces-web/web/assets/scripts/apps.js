@@ -70,7 +70,8 @@ function announceAllWorkspaceEvents() {
         type: "HoloIdAnnouncement",
         id: shell.participant.id,
         name: localStorage.getItem("holoapps_nickname") || "Operator",
-        curveId: shell.participant.curveId
+        curveId: shell.participant.curveId,
+        isDiscoverable: shell.isDiscoverable
       };
       const annJson = JSON.stringify(ann);
       const bytes = new TextEncoder().encode(annJson);
@@ -250,9 +251,38 @@ setInterval(async () => {
               console.log("WebRTC received peer Holo ID announcement:", eventData.id, eventData.name);
               const shell = window.shellInstance;
               if (shell && eventData.id && eventData.id !== shell.participant?.id) {
-                if (!shell.discoveredPeers.some(p => p.id === eventData.id)) {
-                  shell.discoveredPeers.push(eventData);
+                const discOpt = eventData.isDiscoverable !== false;
+                if (discOpt) {
+                  if (!shell.discoveredPeers.some(p => p.id === eventData.id) && !shell.contacts.some(c => c.id === eventData.id)) {
+                    shell.discoveredPeers.push(eventData);
+                  }
                 }
+              }
+              continue;
+            }
+
+            if (eventData.type === "FriendRequest") {
+              const shell = window.shellInstance;
+              if (shell && eventData.targetId === shell.participant?.id) {
+                console.log("WebRTC received FriendRequest from:", eventData.senderName, eventData.senderId);
+                if (!shell.contacts.some(c => c.id === eventData.senderId) && !shell.friendRequests.some(r => r.senderId === eventData.senderId)) {
+                  shell.friendRequests.push({
+                    id: eventData.senderId,
+                    senderId: eventData.senderId,
+                    senderName: eventData.senderName,
+                    senderCurveId: eventData.senderCurveId
+                  });
+                }
+              }
+              continue;
+            }
+
+            if (eventData.type === "FriendResponse") {
+              const shell = window.shellInstance;
+              if (shell && eventData.targetId === shell.participant?.id && eventData.status === "accepted") {
+                console.log("WebRTC received FriendResponse (accepted) from:", eventData.senderName, eventData.senderId);
+                shell.discoverContact(eventData.senderId, eventData.senderCurveId, eventData.senderName);
+                shell.sentFriendRequests = shell.sentFriendRequests.filter(id => id !== eventData.senderId);
               }
               continue;
             }
@@ -394,7 +424,7 @@ setInterval(async () => {
 
 
 export function workspaceReducer(events) {
-  const state = { name: "", channels: [], members: [] };
+  const state = { name: "", channels: [], members: [], installedApps: [], contacts: [] };
   if (!events || !Array.isArray(events)) return state;
   for (const ev of events) {
     if (!ev) continue;
@@ -407,16 +437,40 @@ export function workspaceReducer(events) {
       state.name = payload.name || "Unnamed Workspace";
       state.channels = payload.channels || [];
       state.members = payload.members || [author];
+      state.installedApps = payload.installedApps || [];
+      state.contacts = payload.contacts || [];
     } else if (eventKind === "add-channel" || (type === "Add" && payload.object?.type === "Conversation")) {
       const chId = payload.object?.id || payload.id;
       const chName = payload.object?.name || payload.name;
       if (chId && !state.channels.some(c => c.id === chId)) {
         state.channels.push({ id: chId, name: chName });
       }
-    } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person")) {
+    } else if (eventKind === "add-member" || (type === "Add" && payload.object?.type === "Person" && payload.target?.type === "Group")) {
       const memberId = payload.object?.id || payload.id;
       if (memberId && !state.members.includes(memberId)) {
         state.members.push(memberId);
+      }
+    } else if (eventKind === "add-app" || (type === "Add" && payload.object?.type === "Application")) {
+      const appId = payload.object?.id || payload.id;
+      if (appId && !state.installedApps.includes(appId)) {
+        state.installedApps.push(appId);
+      }
+    } else if (eventKind === "add-workspace-contact" || (type === "Add" && payload.object?.type === "Person" && payload.target?.type === "ContactPage")) {
+      const person = payload.object;
+      if (person && person.id && !state.contacts.some(c => c.id === person.id)) {
+        state.contacts.push({
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Person",
+          "id": person.id,
+          "name": person.name,
+          "curveId": person.curveId,
+          "pools": person.pools || ["pool:default"]
+        });
+      }
+    } else if (eventKind === "delete-workspace-contact" || (type === "Remove" && payload.object?.type === "Person" && payload.target?.type === "ContactPage")) {
+      const personId = payload.object?.id || payload.id;
+      if (personId) {
+        state.contacts = state.contacts.filter(c => c.id !== personId);
       }
     }
   }
@@ -471,6 +525,169 @@ Alpine.data("shell", () => {
             "header": ev.header
           }, null, 2);
         });
+    },
+
+    get workspaceEvents() {
+      if (!this.activeWorkspace) return [];
+      const col = this.activeWorkspace.collection;
+      if (!col) return [];
+      const list = [];
+      for (const ev of col.events.values()) {
+        const payload = ev.body.cleartext || ev.decodedPayload || {};
+        if (ev.header.kind === "calendar-event" || payload.type === "Event") {
+          list.push({
+            id: ev.id,
+            title: payload.name || payload.title || "Untitled Event",
+            date: payload.startTime || payload.date || "",
+            summary: payload.summary || payload.description || "",
+            author: ev.header.author
+          });
+        }
+      }
+      return list.sort((a, b) => new Date(a.date) - new Date(b.date));
+    },
+
+    get workspaceMediaItems() {
+      if (!this.activeWorkspace) return [];
+      const col = this.activeWorkspace.collection;
+      if (!col) return [];
+      const list = [];
+      for (const ev of col.events.values()) {
+        const payload = ev.body.cleartext || ev.decodedPayload || {};
+        if (ev.header.kind === "media-item" || payload.type === "Document") {
+          list.push({
+            id: ev.id,
+            title: payload.name || payload.title || "Untitled Media",
+            url: payload.url || payload.contentUrl || "",
+            mediaType: payload.mediaType || "image/png",
+            summary: payload.summary || "",
+            privacy: payload.privacy || "public",
+            author: ev.header.author
+          });
+        }
+      }
+      return list;
+    },
+
+    get filteredWorkspaceMedia() {
+      const allMedia = this.workspaceMediaItems || [];
+      const participantId = this.participant ? this.participant.id : "";
+      
+      return allMedia.filter(item => {
+        // 1. Privacy filter
+        if (item.privacy === 'private' && item.author !== participantId) {
+          return false;
+        }
+        
+        // 2. Search query filter
+        if (this.mediaSearchQuery) {
+          const q = this.mediaSearchQuery.toLowerCase();
+          const titleMatch = (item.title || "").toLowerCase().includes(q);
+          const summaryMatch = (item.summary || "").toLowerCase().includes(q);
+          if (!titleMatch && !summaryMatch) return false;
+        }
+        
+        // 3. Category/Type filter
+        if (this.selectedMediaCategory && this.selectedMediaCategory !== 'all') {
+          const cat = this.selectedMediaCategory;
+          const type = item.mediaType || "";
+          if (cat === 'images' && !type.startsWith('image/')) return false;
+          if (cat === 'videos' && !type.startsWith('video/')) return false;
+          if (cat === 'documents' && !type.startsWith('application/pdf') && !type.startsWith('application/vnd.ms-powerpoint')) return false;
+          if (cat === 'apps' && type !== 'application/x-holo-app' && type !== 'application/manifest+json') return false;
+        }
+        return true;
+      });
+    },
+
+    get workspaceSharedApps() {
+      const allMedia = this.workspaceMediaItems || [];
+      const participantId = this.participant ? this.participant.id : "";
+      
+      return allMedia.filter(item => {
+        const isApp = item.mediaType === 'application/x-holo-app' || item.mediaType === 'application/manifest+json';
+        if (!isApp) return false;
+        
+        if (item.privacy === 'private' && item.author !== participantId) {
+          return false;
+        }
+        return true;
+      }).map(item => {
+        return {
+          id: item.id,
+          name: item.title,
+          summary: item.summary || "No description provided.",
+          url: item.url,
+          mediaType: item.mediaType,
+          author: item.author,
+          privacy: item.privacy
+        };
+      });
+    },
+
+    get workspaceContacts() {
+      if (!this.activeWorkspace) return [];
+      return this.activeWorkspace.contacts || [];
+    },
+
+    get incomingCall() {
+      if (!this.activeWorkspace) return null;
+      const col = this.activeWorkspace.collection;
+      if (!col) return null;
+      
+      const events = Array.from(col.events.values()).sort((a, b) => b.header.clock - a.header.clock);
+      for (const ev of events) {
+        const payload = ev.body.cleartext || ev.decodedPayload || {};
+        if (ev.header.kind === "call-session" || payload.type === "OfferCall") {
+          const callee = payload.object?.id || payload.callee;
+          const status = payload.callStatus;
+          const caller = ev.header.author;
+          
+          if (callee === this.participant?.id) {
+            if (status === "offered") {
+              const isEnded = events.some(e => {
+                const p = e.body.cleartext || e.decodedPayload || {};
+                const isCallAct = e.header.kind === "call-session" || p.type === "OfferCall";
+                const matchingSession = p.peerId === ev.id || p.object?.id === ev.id || e.header.parents.includes(ev.id);
+                return isCallAct && matchingSession && (p.callStatus === "ended" || p.callStatus === "rejected" || p.callStatus === "accepted");
+              });
+              if (!isEnded) {
+                const contact = this.contacts.find(c => c.id === caller) || { name: "Peer " + caller.substring(0, 6) };
+                return {
+                  id: ev.id,
+                  caller: caller,
+                  callerName: contact.name,
+                  status: "offered"
+                };
+              }
+            }
+          }
+        }
+      }
+      return null;
+    },
+
+    get outboundCallState() {
+      if (!this.activeCallSession || !this.activeWorkspace) return null;
+      const col = this.activeWorkspace.collection;
+      if (!col) return this.activeCallSession;
+      
+      const events = Array.from(col.events.values()).sort((a, b) => b.header.clock - a.header.clock);
+      const sessionId = this.activeCallSession.id;
+      for (const ev of events) {
+        const payload = ev.body.cleartext || ev.decodedPayload || {};
+        const isCallAct = ev.header.kind === "call-session" || payload.type === "OfferCall";
+        const matchingSession = payload.peerId === sessionId || payload.object?.id === sessionId || ev.header.parents.includes(sessionId);
+        if (isCallAct && matchingSession) {
+          if (payload.callStatus === "accepted" && this.activeCallSession.status === "dialing") {
+            this.activeCallSession.status = "connected";
+          } else if (payload.callStatus === "rejected" || payload.callStatus === "ended") {
+            this.activeCallSession = null;
+            return null;
+          }
+        }
+      }
+      return this.activeCallSession;
     },
     participant: null,
     configCollection: null,
@@ -527,10 +744,33 @@ Alpine.data("shell", () => {
       return this.isWebRtcLinkOpen;
     },
     discoveredPeers: [],
+    isDiscoverable: localStorage.getItem("holoapps_discoverable") !== "false",
+    friendRequests: [],
+    sentFriendRequests: [],
     passPreview: null,
     holoIdInput: "",
     nicknameInput: localStorage.getItem("holoapps_nickname") || "Operator",
     
+    // New Holo-Apps State
+    newCalendarEventTitle: "",
+    newCalendarEventDate: "",
+    newCalendarEventDescription: "",
+    newMediaItemTitle: "",
+    newMediaItemUrl: "",
+    newMediaItemType: "image/png",
+    newMediaItemSummary: "",
+    newMediaItemPrivacy: "public",
+    mediaSearchQuery: "",
+    selectedMediaCategory: "all",
+    activeRunningApp: null,
+    activeCallSession: null,
+    showAddEventModal: false,
+    showAddMediaModal: false,
+    newWorkspaceContactAlias: "",
+    newWorkspaceContactId: "",
+    newWorkspaceContactCurveId: "",
+    showAddWorkspaceContactModal: false,
+
     topBarTitle: "Workspace Dashboard",
 
     async init() {
@@ -575,8 +815,50 @@ Alpine.data("shell", () => {
         }
       }
 
-      const mockManifest = await createMessengerApp(this.participant);
-      this.indexApps = [mockManifest];
+      // Define 4 Holo-App manifests in the Index Store
+      const messengerReducerId = await sha256(messengerReducer.toString());
+      const messengerProjId = await sha256("holo-messenger-ui-bundle-v1");
+      const messengerApp = await App.create(
+        "Messages",
+        messengerReducerId,
+        messengerProjId,
+        ["message", "reaction", "edit", "delete"],
+        ["read", "write"],
+        this.participant
+      );
+      messengerApp.id = "holo-messenger";
+
+      const calendarApp = await App.create(
+        "Calendar",
+        await sha256("holo-calendar-reducer-v1"),
+        await sha256("holo-calendar-ui-bundle-v1"),
+        ["calendar-event"],
+        ["read", "write"],
+        this.participant
+      );
+      calendarApp.id = "holo-calendar";
+
+      const multimediaApp = await App.create(
+        "Multi-media",
+        await sha256("holo-multimedia-reducer-v1"),
+        await sha256("holo-multimedia-ui-bundle-v1"),
+        ["media-item"],
+        ["read", "write"],
+        this.participant
+      );
+      multimediaApp.id = "holo-multimedia";
+
+      const callingApp = await App.create(
+        "Calling",
+        await sha256("holo-calling-reducer-v1"),
+        await sha256("holo-calling-ui-bundle-v1"),
+        ["call-session"],
+        ["read", "write"],
+        this.participant
+      );
+      callingApp.id = "holo-calling";
+
+      this.indexApps = [messengerApp, calendarApp, multimediaApp, callingApp];
 
       if (this.configCollection.events.size === 0) {
         const defaultPools = [
@@ -615,7 +897,7 @@ Alpine.data("shell", () => {
           collectionId: configColId,
           payload: {
             type: "config-genesis",
-            installedApps: [mockManifest.id],
+            installedApps: [messengerApp.id],
             contacts: [selfContact],
             contactPools: defaultPools,
             workspaces: []
@@ -701,14 +983,76 @@ Alpine.data("shell", () => {
     },
 
     isAppInstalled(appId) {
+      if (this.activeWorkspace) {
+        return (this.activeWorkspace.installedApps || []).includes(appId);
+      }
       return this.installedAppIds.includes(appId);
     },
 
     async installIndexApp(app) {
-      if (!this.isAppInstalled(app.id)) {
-        this.installedAppIds.push(app.id);
-        await this.writeConfigUpdate({ installedApps: this.installedAppIds });
-        console.log("Installed app:", app.name);
+      if (this.activeWorkspace) {
+        if (this.isAppInstalled(app.id)) return;
+        const wsCol = this.activeWorkspace.collection;
+        const parents = Array.from(wsCol.heads);
+        let maxClock = 0;
+        for (const pId of parents) {
+          const parent = wsCol.events.get(pId);
+          if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+        }
+
+        const addPayload = {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "type": "Add",
+          "object": {
+            "type": "Application",
+            "id": app.id,
+            "name": app.name
+          },
+          "target": {
+            "type": "Group",
+            "id": wsCol.id
+          }
+        };
+
+        try {
+          const { StandardsValidator } = await import("./standards-validator.js");
+          StandardsValidator.validateActivityStreams(addPayload, "Add");
+        } catch (err) {
+          console.error("Standards compliance check failed on add-app event:", err.message);
+          alert(`Standards compliance check failed: ${err.message}`);
+          return;
+        }
+
+        const addEvent = await Event.create({
+          kind: "add-app",
+          author: this.participant.id,
+          collectionId: wsCol.id,
+          parents,
+          clock: maxClock + 1,
+          payload: addPayload
+        }, this.participant);
+
+        await wsCol.addEvent(addEvent);
+        this.saveEventToStorage(addEvent);
+
+        const state = await wsCol.render();
+        const idx = this.workspaces.findIndex(w => w.id === this.activeWorkspace.id);
+        if (idx !== -1) {
+          this.activeWorkspace = { 
+            ...this.activeWorkspace, 
+            installedApps: state.installedApps 
+          };
+          this.workspaces[idx] = this.activeWorkspace;
+        } else {
+          this.activeWorkspace.installedApps = state.installedApps;
+        }
+        console.log("Successfully installed app", app.name, "into workspace", this.activeWorkspace.name);
+      } else {
+        if (!this.isAppInstalled(app.id)) {
+          this.installedAppIds.push(app.id);
+          await this.writeConfigUpdate({ installedApps: this.installedAppIds });
+          console.log("Installed app globally:", app.name);
+        }
       }
     },
 
@@ -931,7 +1275,9 @@ Alpine.data("shell", () => {
               collection: existing ? existing.collection : null
             };
           }),
-          members: state.members || []
+          members: state.members || [],
+          installedApps: state.installedApps || [],
+          contacts: state.contacts || []
         });
       }
 
@@ -992,7 +1338,9 @@ Alpine.data("shell", () => {
           "channels": [
             { "type": "Conversation", "id": genChanGenesis.id, "name": "general" }
           ],
-          "members": [this.participant.id]
+          "members": [this.participant.id],
+          "installedApps": ["holo-messenger"],
+          "contacts": []
         }
       }, this.participant);
       wsGenesis.header.collection = wsGenesis.id;
@@ -1017,7 +1365,9 @@ Alpine.data("shell", () => {
         name: "Local Swarm",
         collection: col,
         channels: state.channels || [],
-        members: state.members || []
+        members: state.members || [],
+        installedApps: state.installedApps || ["holo-messenger"],
+        contacts: state.contacts || []
       };
       
       this.workspaces.push(wsObj);
@@ -1068,7 +1418,9 @@ Alpine.data("shell", () => {
         "channels": [
           { "type": "Conversation", "id": genChanGenesis.id, "name": "general" }
         ],
-        "members": [this.participant.id]
+        "members": [this.participant.id],
+        "installedApps": ["holo-messenger"],
+        "contacts": []
       };
 
       try {
@@ -1114,7 +1466,9 @@ Alpine.data("shell", () => {
         name: this.newWorkspaceName,
         collection: col,
         channels: state.channels || [],
-        members: state.members || []
+        members: state.members || [],
+        installedApps: state.installedApps || ["holo-messenger"],
+        contacts: state.contacts || []
       };
       
       this.workspaces.push(wsObj);
@@ -1416,6 +1770,376 @@ Alpine.data("shell", () => {
       this.topBarTitle = `Workspace: ${ws.name}`;
     },
 
+    async createCalendarEvent() {
+      if (!this.activeWorkspace || !this.newCalendarEventTitle || !this.newCalendarEventDate) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Event",
+        "name": this.newCalendarEventTitle.trim(),
+        "startTime": this.newCalendarEventDate,
+        "summary": this.newCalendarEventDescription.trim()
+      };
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(payload, "Event");
+      } catch (err) {
+        console.error("AS2 validation failed for Event:", err.message);
+        alert(`Validation failed: ${err.message}`);
+        return;
+      }
+
+      const eventObj = await Event.create({
+        kind: "calendar-event",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(eventObj);
+      this.saveEventToStorage(eventObj);
+
+      this.newCalendarEventTitle = "";
+      this.newCalendarEventDate = "";
+      this.newCalendarEventDescription = "";
+      this.showAddEventModal = false;
+      
+      this.activeWorkspace = { ...this.activeWorkspace };
+    },
+
+    async createMediaItem() {
+      if (!this.activeWorkspace || !this.newMediaItemTitle || !this.newMediaItemUrl) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Document",
+        "name": this.newMediaItemTitle.trim(),
+        "url": this.newMediaItemUrl.trim(),
+        "mediaType": this.newMediaItemType,
+        "summary": this.newMediaItemSummary.trim(),
+        "privacy": this.newMediaItemPrivacy || "public"
+      };
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(payload, "Document");
+      } catch (err) {
+        console.error("AS2 validation failed for Document:", err.message);
+        alert(`Validation failed: ${err.message}`);
+        return;
+      }
+
+      const eventObj = await Event.create({
+        kind: "media-item",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(eventObj);
+      this.saveEventToStorage(eventObj);
+
+      this.newMediaItemTitle = "";
+      this.newMediaItemUrl = "";
+      this.newMediaItemSummary = "";
+      this.newMediaItemPrivacy = "public";
+      this.showAddMediaModal = false;
+
+      this.activeWorkspace = { ...this.activeWorkspace };
+    },
+
+    async createWorkspaceContact() {
+      if (!this.activeWorkspace || !this.newWorkspaceContactId || !this.newWorkspaceContactCurveId) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const person = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Person",
+        "id": this.newWorkspaceContactId.trim(),
+        "name": this.newWorkspaceContactAlias.trim() || "Contact " + this.newWorkspaceContactId.substring(0, 6),
+        "curveId": this.newWorkspaceContactCurveId.trim(),
+        "pools": ["pool:default"]
+      };
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Add",
+        "object": person,
+        "target": {
+          "type": "ContactPage",
+          "id": "contacts"
+        }
+      };
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(payload, "Add");
+      } catch (err) {
+        console.error("AS2 validation failed for Add Person (Workspace Contact):", err.message);
+        alert(`Validation failed: ${err.message}`);
+        return;
+      }
+
+      const addEvent = await Event.create({
+        kind: "add-workspace-contact",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(addEvent);
+      this.saveEventToStorage(addEvent);
+
+      const state = await wsCol.render();
+      this.activeWorkspace = { ...this.activeWorkspace, contacts: state.contacts };
+      const idx = this.workspaces.findIndex(w => w.id === this.activeWorkspace.id);
+      if (idx !== -1) {
+        this.workspaces[idx] = this.activeWorkspace;
+      }
+
+      this.newWorkspaceContactId = "";
+      this.newWorkspaceContactCurveId = "";
+      this.newWorkspaceContactAlias = "";
+      this.showAddWorkspaceContactModal = false;
+    },
+
+    async deleteWorkspaceContact(contactId) {
+      if (!this.activeWorkspace) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Remove",
+        "object": {
+          "type": "Person",
+          "id": contactId
+        },
+        "target": {
+          "type": "ContactPage",
+          "id": "contacts"
+        }
+      };
+
+      try {
+        const { StandardsValidator } = await import("./standards-validator.js");
+        StandardsValidator.validateActivityStreams(payload, "Remove");
+      } catch (err) {
+        console.error("AS2 validation failed for Remove Person (Workspace Contact):", err.message);
+        alert(`Validation failed: ${err.message}`);
+        return;
+      }
+
+      const removeEvent = await Event.create({
+        kind: "delete-workspace-contact",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(removeEvent);
+      this.saveEventToStorage(removeEvent);
+
+      const state = await wsCol.render();
+      this.activeWorkspace = { ...this.activeWorkspace, contacts: state.contacts };
+      const idx = this.workspaces.findIndex(w => w.id === this.activeWorkspace.id);
+      if (idx !== -1) {
+        this.workspaces[idx] = this.activeWorkspace;
+      }
+    },
+
+    async initiateCall(memberId) {
+      if (!this.activeWorkspace) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OfferCall",
+        "callee": memberId,
+        "callStatus": "offered",
+        "published": new Date().toISOString()
+      };
+
+      const eventObj = await Event.create({
+        kind: "call-session",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(eventObj);
+      this.saveEventToStorage(eventObj);
+
+      const target = this.contacts.find(c => c.id === memberId) || { name: "Peer " + memberId.substring(0, 6) };
+      this.activeCallSession = {
+        id: eventObj.id,
+        peerId: memberId,
+        peerName: target.name,
+        status: "dialing",
+        role: "caller"
+      };
+
+      this.activeWorkspace = { ...this.activeWorkspace };
+    },
+
+    async acceptCall(callId) {
+      if (!this.activeWorkspace) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      if (!parents.includes(callId)) parents.push(callId);
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OfferCall",
+        "peerId": callId,
+        "callStatus": "accepted",
+        "published": new Date().toISOString()
+      };
+
+      const eventObj = await Event.create({
+        kind: "call-session",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(eventObj);
+      this.saveEventToStorage(eventObj);
+
+      const incoming = this.incomingCall;
+      this.activeCallSession = {
+        id: callId,
+        peerId: incoming ? incoming.caller : "",
+        peerName: incoming ? incoming.callerName : "Caller",
+        status: "connected",
+        role: "callee"
+      };
+
+      this.activeWorkspace = { ...this.activeWorkspace };
+    },
+
+    async declineCall(callId) {
+      if (!this.activeWorkspace) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      if (!parents.includes(callId)) parents.push(callId);
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OfferCall",
+        "peerId": callId,
+        "callStatus": "rejected",
+        "published": new Date().toISOString()
+      };
+
+      const eventObj = await Event.create({
+        kind: "call-session",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(eventObj);
+      this.saveEventToStorage(eventObj);
+
+      this.activeCallSession = null;
+      this.activeWorkspace = { ...this.activeWorkspace };
+    },
+
+    async endCall(callId) {
+      if (!this.activeWorkspace) return;
+      const wsCol = this.activeWorkspace.collection;
+      const parents = Array.from(wsCol.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = wsCol.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      if (!parents.includes(callId)) parents.push(callId);
+
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "OfferCall",
+        "peerId": callId,
+        "callStatus": "ended",
+        "published": new Date().toISOString()
+      };
+
+      const eventObj = await Event.create({
+        kind: "call-session",
+        author: this.participant.id,
+        collectionId: wsCol.id,
+        parents,
+        clock: maxClock + 1,
+        payload
+      }, this.participant);
+
+      await wsCol.addEvent(eventObj);
+      this.saveEventToStorage(eventObj);
+
+      this.activeCallSession = null;
+      this.activeWorkspace = { ...this.activeWorkspace };
+    },
+
     async exportActiveWorkspaceInvite() {
       if (!this.activeWorkspace) return;
       try {
@@ -1534,7 +2258,9 @@ Alpine.data("shell", () => {
             name: payload.name || "Joined Workspace",
             collection: col,
             channels: state.channels || [],
-            members: state.members || []
+            members: state.members || [],
+            installedApps: state.installedApps || ["holo-messenger"],
+            contacts: state.contacts || []
           };
 
           this.workspaces.push(wsObj);
@@ -1830,6 +2556,72 @@ Alpine.data("shell", () => {
     addDiscoveredContact(peer) {
       this.discoverContact(peer.id, peer.curveId, peer.name);
       this.discoveredPeers = this.discoveredPeers.filter(p => p.id !== peer.id);
+    },
+
+    toggleDiscoverable() {
+      this.isDiscoverable = !this.isDiscoverable;
+      localStorage.setItem("holoapps_discoverable", this.isDiscoverable ? "true" : "false");
+      announceAllWorkspaceEvents();
+    },
+
+    async sendFriendRequest(peer) {
+      if (!peer || !peer.id) return;
+      if (this.sentFriendRequests.includes(peer.id)) return;
+      
+      try {
+        const payload = {
+          type: "FriendRequest",
+          senderId: this.participant.id,
+          senderName: localStorage.getItem("holoapps_nickname") || "Operator",
+          senderCurveId: this.participant.curveId,
+          targetId: peer.id
+        };
+        const json = JSON.stringify(payload);
+        const bytes = new TextEncoder().encode(json);
+        const kappa = console0.cn_put(bytes);
+        console0.cn_announce(kappa);
+        
+        this.sentFriendRequests.push(peer.id);
+        console.log("Sent FriendRequest to:", peer.name, peer.id);
+      } catch (e) {
+        console.error("Failed to send friend request:", e);
+      }
+    },
+
+    async acceptFriendRequest(req) {
+      if (!req) return;
+      
+      this.discoverContact(req.senderId, req.senderCurveId, req.senderName);
+      
+      try {
+        const payload = {
+          type: "FriendResponse",
+          status: "accepted",
+          senderId: this.participant.id,
+          senderName: localStorage.getItem("holoapps_nickname") || "Operator",
+          senderCurveId: this.participant.curveId,
+          targetId: req.senderId
+        };
+        const json = JSON.stringify(payload);
+        const bytes = new TextEncoder().encode(json);
+        const kappa = console0.cn_put(bytes);
+        console0.cn_announce(kappa);
+        console.log("Sent FriendResponse (accepted) to:", req.senderName);
+      } catch (e) {
+        console.error("Failed to send friend response:", e);
+      }
+      
+      this.friendRequests = this.friendRequests.filter(r => r.senderId !== req.senderId);
+    },
+
+    declineFriendRequest(req) {
+      if (!req) return;
+      this.friendRequests = this.friendRequests.filter(r => r.senderId !== req.senderId);
+    },
+
+    launchUserlandApp(app) {
+      if (!app) return;
+      this.activeRunningApp = app;
     },
 
     copyHoloId() {
