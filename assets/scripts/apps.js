@@ -84,23 +84,29 @@ function announceAllWorkspaceEvents() {
     }
   }
   
-  if (shell.activeWorkspace) {
-    for (const ev of shell.activeWorkspace.collection.events.values()) {
-      toAnnounce.push(ev);
-    }
-    for (const ch of shell.activeWorkspace.channels) {
-      if (ch.collection) {
-        for (const ev of ch.collection.events.values()) {
+  if (shell.workspaces) {
+    for (const ws of shell.workspaces) {
+      if (ws.collection) {
+        for (const ev of ws.collection.events.values()) {
           toAnnounce.push(ev);
         }
-      } else {
-        const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
-        for (const evId of eventIds) {
-          const raw = localStorage.getItem(`holoapps_event:${evId}`);
-          if (raw) {
-            try {
-              toAnnounce.push(JSON.parse(raw));
-            } catch(e) {}
+      }
+      if (ws.channels) {
+        for (const ch of ws.channels) {
+          if (ch.collection) {
+            for (const ev of ch.collection.events.values()) {
+              toAnnounce.push(ev);
+            }
+          } else {
+            const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+            for (const evId of eventIds) {
+              const raw = localStorage.getItem(`holoapps_event:${evId}`);
+              if (raw) {
+                try {
+                  toAnnounce.push(JSON.parse(raw));
+                } catch(e) {}
+              }
+            }
           }
         }
       }
@@ -152,11 +158,23 @@ async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId, isConfig = 
     const state = await col.render();
     const ws = shell.workspaces.find(w => w.id === colId);
     if (ws) {
-      ws.channels = state.channels;
+      const oldChannels = ws.channels || [];
+      ws.channels = (state.channels || []).map(ch => {
+        const existing = oldChannels.find(c => c.id === ch.id);
+        return {
+          id: ch.id,
+          name: ch.name,
+          collection: existing ? existing.collection : null
+        };
+      });
       ws.members = state.members;
       if (shell.activeWorkspace && shell.activeWorkspace.id === colId) {
-        shell.channels = state.channels;
-        shell.activeWorkspace = { ...shell.activeWorkspace };
+        shell.channels = ws.channels;
+        shell.activeWorkspace = { ...ws, channels: ws.channels, members: ws.members };
+        const idx = shell.workspaces.findIndex(w => w.id === colId);
+        if (idx !== -1) {
+          shell.workspaces[idx] = shell.activeWorkspace;
+        }
       }
     }
   } else {
@@ -180,8 +198,10 @@ async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId, isConfig = 
         }
       }
       
+      console.log(`WebRTC: Retry check for pending event ${p.ev.id} (kind: ${p.ev.header.kind}) in col ${p.col.id}: parentsPresent = ${parentsPresent}`);
       if (parentsPresent) {
         const added = await p.col.addEvent(p.ev);
+        console.log(`WebRTC: Retry addEvent result for ${p.ev.id}: added = ${added}`);
         if (added) {
           console.log("WebRTC: Successfully resolved pending event:", p.ev.id, p.ev.header.kind);
           pendingEvents.splice(i, 1);
@@ -239,6 +259,13 @@ setInterval(async () => {
             
             const shell = window.shellInstance;
             if (!shell) continue;
+
+            const isValid = await ev.verify();
+            if (!isValid) {
+              console.error("WebRTC: Invalid signature or hash on received event:", ev.id);
+              continue;
+            }
+            shell.saveEventToStorage(ev);
             
             // 1. Is it a workspace genesis event?
             if (ev.header.kind === "genesis" && ev.body.cleartext?.type === "Group") {
@@ -247,7 +274,6 @@ setInterval(async () => {
                 console.log("WebRTC: Discovered workspace genesis:", wsId, ev.body.cleartext.name);
                 const col = new Collection(wsId, workspaceReducer);
                 await col.addEvent(ev);
-                shell.saveEventToStorage(ev);
                 
                 const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
                 if (!savedRefs.some(w => w.id === wsId)) {
@@ -276,12 +302,12 @@ setInterval(async () => {
             if (ev.header.kind === "genesis" && ev.body.cleartext?.type === "Conversation") {
               const chId = ev.id;
               shell.saveChannelReference(chId, ev.body.cleartext.name);
-              shell.saveEventToStorage(ev);
               console.log("WebRTC: Discovered channel genesis:", chId, ev.body.cleartext.name);
               
-              let ch = shell.channels.find(c => c.id === chId);
-              if (!ch && shell.activeWorkspace) {
-                ch = shell.activeWorkspace.channels.find(c => c.id === chId);
+              let ch = null;
+              for (const w of shell.workspaces) {
+                ch = w.channels.find(c => c.id === chId);
+                if (ch) break;
               }
               if (ch && ch.collection) {
                 const added = await ch.collection.addEvent(ev);
@@ -300,30 +326,34 @@ setInterval(async () => {
             if (shell.configCollection && shell.configCollection.id === colId) {
               col = shell.configCollection;
               isConfig = true;
-            } else if (shell.activeWorkspace && shell.activeWorkspace.id === colId) {
-              col = shell.activeWorkspace.collection;
-              isWorkspace = true;
             } else {
               const ws = shell.workspaces.find(w => w.id === colId);
               if (ws) {
                 col = ws.collection;
                 isWorkspace = true;
               } else {
-                let ch = shell.channels.find(c => c.id === colId);
-                if (!ch && shell.activeWorkspace) {
-                  ch = shell.activeWorkspace.channels.find(c => c.id === colId);
+                let ch = null;
+                for (const w of shell.workspaces) {
+                  ch = w.channels.find(c => c.id === colId);
+                  if (ch) break;
                 }
                 if (ch) {
                   if (!ch.collection) {
                     const colObj = new Collection(ch.id, messengerReducer);
                     const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+                    const events = [];
                     for (const evId of eventIds) {
                       const raw = localStorage.getItem(`holoapps_event:${evId}`);
                       if (raw) {
-                        const evData = JSON.parse(raw);
-                        const evObj = new Event(evData.header, evData.body, evData.signature, evData.id);
-                        await colObj.addEvent(evObj);
+                        try {
+                          events.push(JSON.parse(raw));
+                        } catch(e) {}
                       }
+                    }
+                    events.sort((a, b) => (a.header?.clock || 0) - (b.header?.clock || 0));
+                    for (const evData of events) {
+                      const evObj = new Event(evData.header, evData.body, evData.signature, evData.id);
+                      await colObj.addEvent(evObj);
                     }
                     ch.collection = colObj;
                   }
@@ -841,28 +871,43 @@ Alpine.data("shell", () => {
       if (!saved || saved.length === 0) {
         saved = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
       }
+      const oldWorkspaces = this.workspaces || [];
       this.workspaces = [];
       
       for (const wsRef of saved) {
         const col = new Collection(wsRef.id, workspaceReducer);
         const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${wsRef.id}`) || "[]");
+        const events = [];
         for (const evId of eventIds) {
           const raw = localStorage.getItem(`holoapps_event:${evId}`);
           if (raw) {
             try {
-              const evData = JSON.parse(raw);
-              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-              await col.addEvent(ev);
+              events.push(JSON.parse(raw));
             } catch(e) {}
           }
         }
+        events.sort((a, b) => (a.header?.clock || 0) - (b.header?.clock || 0));
+        for (const evData of events) {
+          const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+          await col.addEvent(ev);
+        }
         
         const state = await col.render();
+        const oldWorkspace = oldWorkspaces.find(w => w.id === wsRef.id);
+        const oldChannels = oldWorkspace ? oldWorkspace.channels : [];
+
         this.workspaces.push({
           id: wsRef.id,
           name: state.name || wsRef.name,
           collection: col,
-          channels: state.channels || [],
+          channels: (state.channels || []).map(ch => {
+            const existing = oldChannels.find(c => c.id === ch.id);
+            return {
+              id: ch.id,
+              name: ch.name,
+              collection: existing ? existing.collection : null
+            };
+          }),
           members: state.members || []
         });
       }
@@ -1137,6 +1182,20 @@ Alpine.data("shell", () => {
       const memberId = prompt("Enter Member's Account ID:");
       if (!memberId) return;
 
+      let curveId = "";
+      const contact = this.contacts.find(c => c.id === memberId) || this.discoveredPeers.find(p => p.id === memberId);
+      if (contact && contact.curveId) {
+        curveId = contact.curveId;
+      } else {
+        for (const w of this.workspaces) {
+          const mObj = w.collection.members.get(memberId);
+          if (mObj && mObj.curveId) {
+            curveId = mObj.curveId;
+            break;
+          }
+        }
+      }
+
       const wsCol = this.activeWorkspace.collection;
       const parents = Array.from(wsCol.heads);
       let maxClock = 0;
@@ -1156,7 +1215,8 @@ Alpine.data("shell", () => {
           "type": "Add",
           "object": {
             "type": "Person",
-            "id": memberId
+            "id": memberId,
+            "curveId": curveId
           },
           "target": {
             "type": "Group",
@@ -1429,6 +1489,9 @@ Alpine.data("shell", () => {
     },
 
     saveEventToStorage(event) {
+      if (localStorage.getItem(`holoapps_event:${event.id}`)) {
+        return;
+      }
       localStorage.setItem(`holoapps_event:${event.id}`, JSON.stringify(event));
       const colId = event.header.collection;
       const idsToSave = [colId];
@@ -1471,13 +1534,19 @@ Alpine.data("shell", () => {
       if (!ch.collection) {
         const col = new Collection(ch.id, messengerReducer);
         const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+        const events = [];
         for (const evId of eventIds) {
           const raw = localStorage.getItem(`holoapps_event:${evId}`);
           if (raw) {
-            const evData = JSON.parse(raw);
-            const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-            await col.addEvent(ev);
+            try {
+              events.push(JSON.parse(raw));
+            } catch(e) {}
           }
+        }
+        events.sort((a, b) => (a.header?.clock || 0) - (b.header?.clock || 0));
+        for (const evData of events) {
+          const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+          await col.addEvent(ev);
         }
         ch.collection = col;
       }

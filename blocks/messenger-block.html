@@ -297,8 +297,21 @@
         return null;
       }
       const channelId = (this.props ? this.props.channelId : this.channelId);
-      const ch = shell.channels.find(c => c.id === channelId);
-      return ch ? ch.collection : null;
+      let ch = shell.channels.find(c => c.id === channelId);
+      if (!ch && shell.activeWorkspace) {
+        ch = shell.activeWorkspace.channels.find(c => c.id === channelId);
+      }
+      if (!ch) {
+        for (const w of shell.workspaces) {
+          ch = w.channels.find(c => c.id === channelId);
+          if (ch) break;
+        }
+      }
+      const col = ch ? ch.collection : null;
+      if (col && typeof col.updateActiveState === "function") {
+        col.updateActiveState();
+      }
+      return col;
     },
 
     getChannelName() {
