@@ -106,10 +106,16 @@ export function base64Decode(str) {
     cleanStr += "=";
   }
 
+  // Guard: if it's not a valid base64 character set, return empty string cleanly
+  const validBase64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+  if (!validBase64Regex.test(cleanStr)) {
+    return "";
+  }
+
   try {
     return decodeURIComponent(escape(atob(cleanStr)));
   } catch (e) {
-    console.log("base64Decode: Failed to decode base64 string:", e.message);
+    console.warn("base64Decode: Failed to decode base64 string:", e.message);
     return "";
   }
 }
@@ -491,7 +497,7 @@ export class Collection {
     // Verify event signature and hash
     const isValid = await event.verify();
     if (!isValid) {
-      console.log(`Collection ${this.id}: Refused event with invalid signature/hash: ${event.id}`);
+      console.error(`Collection ${this.id}: Refused event with invalid signature/hash: ${event.id}`);
       return false;
     }
 
@@ -509,7 +515,7 @@ export class Collection {
     // Re-evaluate capability list at this event's causality
     const authorized = await this.checkEventAuthority(event);
     if (!authorized) {
-      console.log(`Collection ${this.id}: Refused unauthorized event ${event.id} from ${event.header.author}`);
+      console.error(`Collection ${this.id}: Refused unauthorized event ${event.id} from ${event.header.author}`);
       this.events.delete(event.id);
       return false;
     }
@@ -640,7 +646,7 @@ export class Collection {
       const decryptedText = await HoloAppsCrypto.openPayload(epochKey, event.body.ciphertext, event.body.iv);
       return JSON.parse(decryptedText);
     } catch (e) {
-      console.log(`Failed to decrypt event body for ${event.id} under epoch ${epochId}:`, e);
+      console.error(`Failed to decrypt event body for ${event.id} under epoch ${epochId}:`, e);
       return null;
     }
   }
@@ -665,7 +671,7 @@ export class Collection {
       this.currentEpochId = epochEvent.id;
       return true;
     } catch (e) {
-      console.log(`Failed to unwrap epoch key for epoch ${epochEvent.id}:`, e);
+      console.error(`Failed to unwrap epoch key for epoch ${epochEvent.id}:`, e);
       return false;
     }
   }

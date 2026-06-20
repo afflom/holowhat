@@ -21,7 +21,7 @@ export class StandardsValidator {
         console.log("StandardsValidator: Context endpoints returned non-ok responses.", asResp.status, schemaResp.status);
       }
     } catch (e) {
-      console.log("StandardsValidator: Failed to load authoritative schemas context files:", e);
+      console.error("StandardsValidator: Failed to load authoritative schemas context files:", e);
     }
   }
 
