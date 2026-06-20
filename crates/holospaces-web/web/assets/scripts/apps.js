@@ -170,7 +170,11 @@ async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId, isConfig = 
       ws.members = state.members;
       if (shell.activeWorkspace && shell.activeWorkspace.id === colId) {
         shell.channels = ws.channels;
-        shell.activeWorkspace = { ...shell.activeWorkspace };
+        shell.activeWorkspace = { ...ws, channels: ws.channels, members: ws.members };
+        const idx = shell.workspaces.findIndex(w => w.id === colId);
+        if (idx !== -1) {
+          shell.workspaces[idx] = shell.activeWorkspace;
+        }
       }
     }
   } else {
@@ -194,8 +198,10 @@ async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId, isConfig = 
         }
       }
       
+      console.log(`WebRTC: Retry check for pending event ${p.ev.id} (kind: ${p.ev.header.kind}) in col ${p.col.id}: parentsPresent = ${parentsPresent}`);
       if (parentsPresent) {
         const added = await p.col.addEvent(p.ev);
+        console.log(`WebRTC: Retry addEvent result for ${p.ev.id}: added = ${added}`);
         if (added) {
           console.log("WebRTC: Successfully resolved pending event:", p.ev.id, p.ev.header.kind);
           pendingEvents.splice(i, 1);

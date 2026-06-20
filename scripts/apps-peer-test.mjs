@@ -302,7 +302,47 @@ server.listen(PORT, async () => {
     await bobPage.locator("input.chat-input").waitFor({ timeout: 5000 });
 
     console.log("Bob waiting for Alice's message in custom channel...");
-    await bobPage.locator(".message-body-text:has-text('Hello Bob, this new channel synced perfectly!')").waitFor({ timeout: 15000 });
+    try {
+      await bobPage.locator(".message-body-text:has-text('Hello Bob, this new channel synced perfectly!')").waitFor({ timeout: 5000 });
+    } catch (e) {
+      console.log("TIMEOUT ERROR - DUMPING BOB STORAGE AND STATE");
+      const storage = await bobPage.evaluate(() => {
+        const colEventsDumps = {};
+        for (const k of Object.keys(localStorage)) {
+          if (k.startsWith("holoapps_col_events:")) {
+            colEventsDumps[k] = localStorage.getItem(k);
+          }
+        }
+        
+        let activeChanDump = null;
+        const bodyEl = document.querySelector("body");
+        if (bodyEl && typeof Alpine !== "undefined") {
+          const shell = Alpine.$data(bodyEl);
+          if (shell.activeChannel) {
+            activeChanDump = {
+              id: shell.activeChannel.id,
+              name: shell.activeChannel.name,
+              hasCollection: !!shell.activeChannel.collection,
+              eventsInCol: shell.activeChannel.collection ? Array.from(shell.activeChannel.collection.events.values()).map(ev => ({
+                id: ev.id,
+                kind: ev.header.kind,
+                parents: ev.header.parents,
+                author: ev.header.author
+              })) : null,
+              membersInCol: shell.activeChannel.collection ? Array.from(shell.activeChannel.collection.members.keys()) : null,
+              capsInCol: shell.activeChannel.collection ? Array.from(shell.activeChannel.collection.capabilities.entries()) : null
+            };
+          }
+        }
+        return {
+          keys: Object.keys(localStorage),
+          colEventsDumps,
+          activeChannel: activeChanDump
+        };
+      });
+      console.log("BOB DUMP:", JSON.stringify(storage, null, 2));
+      throw e;
+    }
     console.log("✓ Bob successfully received Alice's message in the new channel!");
 
     // Check for any console exceptions or warnings

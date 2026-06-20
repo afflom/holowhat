@@ -688,6 +688,8 @@ export class Collection {
     const activeCaps = this.computeCapabilitiesAt(event.header.parents);
     const authorCaps = activeCaps.get(event.header.author) || [];
 
+    // console.log(`checkEventAuthority for event ${event.id} (kind: ${event.header.kind}) by ${event.header.author}: authorCaps = ${JSON.stringify(authorCaps)}`);
+
     if (event.header.kind === "membership" || event.header.kind === "epoch") {
       return authorCaps.includes("admin");
     }
@@ -705,8 +707,13 @@ export class Collection {
 
     // Check if this collection is a channel owned by a workspace
     const shell = getShellInstance();
-    if (shell && shell.workspaces) {
-      for (const ws of shell.workspaces) {
+    if (shell) {
+      const listToCheck = [];
+      if (shell.workspaces) listToCheck.push(...shell.workspaces);
+      if (shell.activeWorkspace && !listToCheck.some(w => w.id === shell.activeWorkspace.id)) {
+        listToCheck.push(shell.activeWorkspace);
+      }
+      for (const ws of listToCheck) {
         if (ws.channels && ws.channels.some(ch => ch.id === this.id)) {
           // Inherit members from workspace collection
           if (ws.collection) {
@@ -754,9 +761,15 @@ export class Collection {
 
     // Check if this collection is a channel owned by a workspace
     const shell = getShellInstance();
-    if (shell && shell.workspaces) {
-      for (const ws of shell.workspaces) {
-        if (ws.channels && ws.channels.some(ch => ch.id === this.id)) {
+    if (shell) {
+      const listToCheck = [];
+      if (shell.workspaces) listToCheck.push(...shell.workspaces);
+      if (shell.activeWorkspace && !listToCheck.some(w => w.id === shell.activeWorkspace.id)) {
+        listToCheck.push(shell.activeWorkspace);
+      }
+      for (const ws of listToCheck) {
+        const isChannel = ws.channels && ws.channels.some(ch => ch.id === this.id);
+        if (isChannel) {
           // Grant read/write capabilities to all workspace members
           if (ws.members) {
             for (const mId of ws.members) {
