@@ -151,6 +151,57 @@ server.listen(PORT, async () => {
     await bobPage.locator(".sidebar-item:has-text('Swarm Workspace')").waitFor({ timeout: 10000 });
     console.log("✓ Bob successfully joined the workspace");
 
+    // 5. Establish peer-to-peer WebRTC link signaling programmatically
+    console.log("Establishing WebRTC connection...");
+    
+    // Alice generates SDP offer
+    const offerSdp = await alicePage.evaluate(async () => {
+      return await window.connectPeerLink(true);
+    });
+    assert.ok(offerSdp, "Alice should successfully generate SDP offer");
+
+    // Bob accepts offer and generates SDP answer
+    const answerSdp = await bobPage.evaluate(async (sdp) => {
+      return await window.connectPeerLink(false, sdp);
+    }, offerSdp);
+    assert.ok(answerSdp, "Bob should successfully generate SDP answer");
+
+    // Alice accepts SDP answer
+    await alicePage.evaluate(async (sdp) => {
+      await window.acceptPeerAnswer(sdp);
+    }, answerSdp);
+
+    // Gather and exchange ICE candidates
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const aliceIce = await alicePage.evaluate(() => window.cnLink.take_ice());
+    const bobIce = await bobPage.evaluate(() => window.cnLink.take_ice());
+
+    console.log(`Exchanging ICE candidates (Alice: ${aliceIce.length}, Bob: ${bobIce.length})...`);
+    
+    for (const ice of aliceIce) {
+      await bobPage.evaluate(async (cand) => {
+        await window.cnLink.add_ice(cand);
+      }, ice);
+    }
+    for (const ice of bobIce) {
+      await alicePage.evaluate(async (cand) => {
+        await window.cnLink.add_ice(cand);
+      }, ice);
+    }
+
+    // Verify WebRTC data channel transitions to Open state
+    console.log("Waiting for WebRTC data channel to open...");
+    let connected = false;
+    for (let i = 0; i < 20; i++) {
+      connected = await alicePage.evaluate(() => window.cnLink.is_open());
+      if (connected) break;
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    assert.ok(connected, "WebRTC Data Channel must successfully open between Alice and Bob!");
+    console.log("✓ WebRTC connection established successfully!");
+
     // 6. Alice selects `# general` channel and starts chat
     console.log("Alice selecting general channel...");
     await alicePage.locator(".sidebar-item:has-text('# general')").click();
@@ -189,44 +240,26 @@ server.listen(PORT, async () => {
     }
     assert.ok(channelInviteCode, "Channel invite code must be generated");
 
-    // Alice types a secure message
-    console.log("Alice sending secure handshake message...");
+    // 8. Bob selects the general channel to listen for messages
+    console.log("Bob selecting general channel...");
+    await bobPage.locator(".sidebar-item:has-text('# general')").click();
+    await bobPage.locator("input.chat-input").waitFor({ timeout: 5000 });
+
+    // 9. Alice types and sends a secure message
+    console.log("Alice sending secure message...");
     await alicePage.locator("input.chat-input").fill("Hello Bob, secure channel active!");
     await alicePage.locator("button.send-btn").first().click();
 
     // Wait for it to render in Alice's timeline
     await alicePage.locator(".message-body-text:has-text('Hello Bob, secure channel active!')").waitFor({ timeout: 10000 });
 
-    // Alice generates updated channel invite code containing the message
-    channelInviteCode = "";
-    console.log("Alice generating channel invite code containing the message...");
-    await alicePage.locator("button:has-text('Invite Peer')").click();
-    for (let i = 0; i < 50; i++) {
-      if (channelInviteCode) break;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    assert.ok(channelInviteCode, "Updated channel invite code must be generated");
-
-    // 8. Bob joins the channel programmatically opening the Join Channel modal
-    console.log("Bob opening Join Channel modal programmatically...");
-    await bobPage.evaluate(() => {
-      Alpine.$data(document.body).showJoinChannelModal = true;
-    });
-
-    await bobPage.locator("input[placeholder='Paste Invite Code']").fill(channelInviteCode);
-    await bobPage.locator(".dialog:has(h2:has-text('Join Channel')) button:text-is('Join')").click();
-
-    // Verify Bob successfully joined and can select the channel
-    console.log("Bob selecting joined channel...");
-    await bobPage.locator(".sidebar-item:has-text('# general')").click();
-
-    // 9. Verify Bob can decrypt and read Alice's message!
+    // 10. Verify Bob automatically decrypts and reads Alice's message via WebRTC sync!
     console.log("Bob waiting for Alice's decrypted message in timeline...");
     const bobMsgText = bobPage.locator(".message-body-text:has-text('Hello Bob, secure channel active!')");
     await bobMsgText.waitFor({ timeout: 15000 });
     console.log("✓ Bob successfully decrypted and read Alice's message!");
 
-    // 10. Bob writes a reply message
+    // 11. Bob writes a reply message
     console.log("Bob replying to Alice...");
     await bobPage.locator("input.chat-input").fill("Hi Alice, verified decrypted!");
     await bobPage.locator("button.send-btn").first().click();
@@ -234,47 +267,7 @@ server.listen(PORT, async () => {
     // Wait for it to render in Bob's timeline
     await bobPage.locator(".message-body-text:has-text('Hi Alice, verified decrypted!')").waitFor({ timeout: 10000 });
 
-    // Bob exports his channel state (which includes his reply)
-    let bobInviteCode = "";
-    bobPage.removeAllListeners("dialog");
-    bobPage.on("dialog", async dialog => {
-      const message = dialog.message();
-      console.log(`[Bob Dialog] message: ${message}`);
-      if (dialog.type() === "prompt") {
-        if (message.includes("Select a contact to invite")) {
-          await dialog.accept("new");
-        } else if (message.includes("Enter Invitee's Identity Address")) {
-          await dialog.accept(aliceId);
-        } else if (message.includes("Enter Invitee's ECDH Public Exchange Key")) {
-          await dialog.accept(aliceCurveId);
-        } else if (message.includes("Share this Invite Code")) {
-          bobInviteCode = dialog.defaultValue();
-          await dialog.accept(bobInviteCode);
-        } else {
-          await dialog.accept();
-        }
-      } else {
-        await dialog.accept();
-      }
-    });
-
-    console.log("Bob exporting updated channel state...");
-    await bobPage.locator("button:has-text('Invite Peer')").click();
-    for (let i = 0; i < 50; i++) {
-      if (bobInviteCode) break;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    assert.ok(bobInviteCode, "Bob's updated channel invite code must be generated");
-
-    // 11. Alice imports Bob's channel state to reconcile/re-render
-    console.log("Alice importing Bob's channel state...");
-    await alicePage.evaluate(() => {
-      Alpine.$data(document.body).showJoinChannelModal = true;
-    });
-    await alicePage.locator("input[placeholder='Paste Invite Code']").fill(bobInviteCode);
-    await alicePage.locator(".dialog:has(h2:has-text('Join Channel')) button:text-is('Join')").click();
-
-    // Verify Alice can see Bob's reply in her timeline!
+    // 12. Verify Alice automatically decrypts and reads Bob's reply via WebRTC sync!
     console.log("Alice waiting for Bob's decrypted reply in timeline...");
     const aliceReplyText = alicePage.locator(".message-body-text:has-text('Hi Alice, verified decrypted!')");
     await aliceReplyText.waitFor({ timeout: 15000 });

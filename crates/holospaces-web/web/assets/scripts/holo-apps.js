@@ -106,7 +106,12 @@ export function base64Decode(str) {
     cleanStr += "=";
   }
 
-  return decodeURIComponent(escape(atob(cleanStr)));
+  try {
+    return decodeURIComponent(escape(atob(cleanStr)));
+  } catch (e) {
+    console.warn("base64Decode: Failed to decode base64 string:", e.message);
+    return "";
+  }
 }
 
 /**

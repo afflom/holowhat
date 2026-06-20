@@ -16,6 +16,280 @@ await init();
 const console0 = new Console();
 console.log("Substrate console active in Holo-Apps Shell");
 
+// WebRTC Signaling and sync state
+let cnLink = null;
+window.cnLink = cnLink;
+const processedKappas = new Set();
+
+window.connectPeerLink = async (isInitiator, targetSdp) => {
+  cnLink = new WebRtcLink(isInitiator);
+  window.cnLink = cnLink;
+  if (isInitiator) {
+    const sdp = await cnLink.create_offer();
+    return sdp;
+  } else {
+    const answer = await cnLink.accept_offer(targetSdp);
+    return answer;
+  }
+};
+
+window.acceptPeerAnswer = async (answerSdp) => {
+  if (cnLink) {
+    await cnLink.accept_answer(answerSdp);
+  }
+};
+
+// Periodic content network pump
+let linkWasOpen = false;
+setInterval(() => {
+  if (window.cnLink && window.cnLink.is_open()) {
+    console0.cn_pump(window.cnLink);
+    if (!linkWasOpen) {
+      linkWasOpen = true;
+      console.log("WebRTC Link opened! Announcing all local workspace events...");
+      announceAllWorkspaceEvents();
+    }
+  } else {
+    linkWasOpen = false;
+  }
+}, 50);
+
+// Helper to announce all local events in the active workspace and channels
+function announceAllWorkspaceEvents() {
+  const shell = Alpine.$data(document.body);
+  if (!shell) return;
+  const toAnnounce = [];
+  
+  if (shell.activeWorkspace) {
+    for (const ev of shell.activeWorkspace.collection.events.values()) {
+      toAnnounce.push(ev);
+    }
+    for (const ch of shell.activeWorkspace.channels) {
+      if (ch.collection) {
+        for (const ev of ch.collection.events.values()) {
+          toAnnounce.push(ev);
+        }
+      } else {
+        const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+        for (const evId of eventIds) {
+          const raw = localStorage.getItem(`holoapps_event:${evId}`);
+          if (raw) {
+            try {
+              toAnnounce.push(JSON.parse(raw));
+            } catch(e) {}
+          }
+        }
+      }
+    }
+  }
+  
+  console.log(`Announcing ${toAnnounce.length} local events over WebRTC...`);
+  for (const ev of toAnnounce) {
+    try {
+      const eventJson = JSON.stringify(ev);
+      const bytes = new TextEncoder().encode(eventJson);
+      const kappa = console0.cn_put(bytes);
+      console0.cn_announce(kappa);
+    } catch (e) {
+      console.error("Failed to announce event:", ev.id, e);
+    }
+  }
+  if (window.cnLink && window.cnLink.is_open()) {
+    console0.cn_pump(window.cnLink);
+  }
+}
+
+// Periodic content discovery: check if remote peer has announced new states
+const pendingEvents = [];
+
+async function handleSuccessfulEventAdd(col, ev, isWorkspace, colId) {
+  const shell = Alpine.$data(document.body);
+  if (!shell) return;
+  shell.saveEventToStorage(ev);
+  
+  if (ev.header.kind === "epoch") {
+    await col.unwrapAndStoreEpochKey(ev, shell.participant);
+  }
+  
+  if (isWorkspace) {
+    const state = await col.render();
+    const ws = shell.workspaces.find(w => w.id === colId);
+    if (ws) {
+      ws.channels = state.channels;
+      ws.members = state.members;
+      if (shell.activeWorkspace && shell.activeWorkspace.id === colId) {
+        shell.channels = state.channels;
+        shell.activeWorkspace = { ...shell.activeWorkspace };
+      }
+    }
+  } else {
+    if (shell.activeChannel && shell.activeChannel.id === colId) {
+      shell.activeChannel = { ...shell.activeChannel };
+    }
+  }
+
+  // Retry pending events!
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (let i = 0; i < pendingEvents.length; i++) {
+      const p = pendingEvents[i];
+      // Check if parents are now present
+      let parentsPresent = true;
+      for (const parentId of p.ev.header.parents) {
+        if (!p.col.events.has(parentId)) {
+          parentsPresent = false;
+          break;
+        }
+      }
+      
+      if (parentsPresent) {
+        const added = await p.col.addEvent(p.ev);
+        if (added) {
+          console.log("WebRTC: Successfully resolved pending event:", p.ev.id, p.ev.header.kind);
+          pendingEvents.splice(i, 1);
+          i--; // adjust index
+          progress = true;
+          await handleSuccessfulEventAdd(p.col, p.ev, p.isWorkspace, p.colId);
+        }
+      }
+    }
+  }
+}
+
+setInterval(async () => {
+  if (window.cnLink && window.cnLink.is_open()) {
+    const knownKappasJson = console0.cn_discover();
+    if (knownKappasJson) {
+      const knownKappas = JSON.parse(knownKappasJson);
+      for (const kappa of knownKappas) {
+        if (processedKappas.has(kappa)) continue;
+        
+        // Fetch event bytes
+        console0.cn_fetch_start(kappa);
+        let resolvedBytes = null;
+        for (let i = 0; i < 30; i++) {
+          console0.cn_pump(window.cnLink);
+          const r = console0.cn_fetch_poll();
+          if (r !== undefined) {
+            resolvedBytes = r;
+            break;
+          }
+          await new Promise(res => setTimeout(res, 50));
+        }
+        
+        if (resolvedBytes) {
+          processedKappas.add(kappa);
+          try {
+            const eventData = JSON.parse(new TextDecoder().decode(resolvedBytes));
+            console.log("WebRTC received event:", eventData.id, eventData.header.kind);
+            
+            const ev = new Event(eventData.header, eventData.body, eventData.signature, eventData.id);
+            const colId = ev.header.collection;
+            if (!colId && ev.header.kind !== "genesis") continue;
+            
+            const shell = Alpine.$data(document.body);
+            if (!shell) continue;
+            
+            // 1. Is it a workspace genesis event?
+            if (ev.header.kind === "genesis" && ev.body.cleartext?.type === "Group") {
+              const wsId = ev.id;
+              if (!shell.workspaces.some(w => w.id === wsId)) {
+                console.log("WebRTC: Discovered workspace genesis:", wsId, ev.body.cleartext.name);
+                const col = new Collection(wsId, workspaceReducer);
+                await col.addEvent(ev);
+                shell.saveEventToStorage(ev);
+                
+                const savedRefs = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
+                if (!savedRefs.some(w => w.id === wsId)) {
+                  savedRefs.push({ id: wsId, name: ev.body.cleartext.name });
+                  localStorage.setItem("holoapps_workspaces", JSON.stringify(savedRefs));
+                }
+                
+                const state = await col.render();
+                const wsObj = {
+                  id: wsId,
+                  name: ev.body.cleartext.name,
+                  collection: col,
+                  channels: state.channels || [],
+                  members: state.members || []
+                };
+                shell.workspaces.push(wsObj);
+                
+                if (!shell.activeWorkspace) {
+                  shell.selectWorkspace(wsObj);
+                }
+              }
+              continue;
+            }
+            
+            // 2. Is it a channel genesis event?
+            if (ev.header.kind === "genesis" && ev.body.cleartext?.type === "Conversation") {
+              const chId = ev.id;
+              shell.saveChannelReference(chId, ev.body.cleartext.name);
+              shell.saveEventToStorage(ev);
+              console.log("WebRTC: Discovered channel genesis:", chId, ev.body.cleartext.name);
+              continue;
+            }
+            
+            // 3. Regular event, find collection
+            let col = null;
+            let isWorkspace = false;
+            
+            if (shell.activeWorkspace && shell.activeWorkspace.id === colId) {
+              col = shell.activeWorkspace.collection;
+              isWorkspace = true;
+            } else {
+              const ws = shell.workspaces.find(w => w.id === colId);
+              if (ws) {
+                col = ws.collection;
+                isWorkspace = true;
+              } else {
+                let ch = shell.channels.find(c => c.id === colId);
+                if (!ch && shell.activeWorkspace) {
+                  ch = shell.activeWorkspace.channels.find(c => c.id === colId);
+                }
+                if (ch) {
+                  if (!ch.collection) {
+                    const colObj = new Collection(ch.id, messengerReducer);
+                    const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+                    for (const evId of eventIds) {
+                      const raw = localStorage.getItem(`holoapps_event:${evId}`);
+                      if (raw) {
+                        const evData = JSON.parse(raw);
+                        const evObj = new Event(evData.header, evData.body, evData.signature, evData.id);
+                        await colObj.addEvent(evObj);
+                      }
+                    }
+                    ch.collection = colObj;
+                  }
+                  col = ch.collection;
+                }
+              }
+            }
+            
+            if (col) {
+              const added = await col.addEvent(ev);
+              if (added) {
+                await handleSuccessfulEventAdd(col, ev, isWorkspace, colId);
+              } else {
+                // If it failed to add (due to causal dependency missing), queue it for retry
+                if (!pendingEvents.some(p => p.ev.id === ev.id)) {
+                  console.log("WebRTC: Event missing parents, queued for retry:", ev.id, ev.header.kind);
+                  pendingEvents.push({ col, ev, isWorkspace, colId });
+                }
+              }
+            }
+          } catch (e) {
+            console.error("WebRTC: Failed to import fetched event:", e);
+          }
+        }
+      }
+    }
+  }
+}, 1000);
+
+
 export function workspaceReducer(events) {
   const state = { name: "", channels: [], members: [] };
   if (!events || !Array.isArray(events)) return state;
@@ -165,7 +439,12 @@ Alpine.data("shell", () => {
 
     async loadExistingIdentity() {
       try {
-        const jwkObj = JSON.parse(base64Decode(this.privateKeyHexInput.trim()));
+        const decoded = base64Decode(this.privateKeyHexInput.trim());
+        if (!decoded) {
+          alert("Failed to import account. Ensure you pasted a valid Account Backup Payload.");
+          return;
+        }
+        const jwkObj = JSON.parse(decoded);
         const p = await Participant.importJwk(jwkObj);
         this.participant = p;
         localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwkObj));
@@ -689,7 +968,12 @@ Alpine.data("shell", () => {
     async joinWorkspace() {
       if (!this.inviteCodeInput) return;
       try {
-        const payload = JSON.parse(base64Decode(this.inviteCodeInput.trim()));
+        const decoded = base64Decode(this.inviteCodeInput.trim());
+        if (!decoded) {
+          alert("Failed to join workspace. Invalid workspace invite code.");
+          return;
+        }
+        const payload = JSON.parse(decoded);
         if (payload && payload.type === "WorkspaceInvite" && payload.id && payload.genesisEvent) {
           const gData = payload.genesisEvent;
           const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
@@ -777,6 +1061,20 @@ Alpine.data("shell", () => {
           localStorage.setItem(`holoapps_col_events:${cid}`, JSON.stringify(eventIds));
         }
       }
+
+      // Real-time broadcast over WebRTC
+      if (window.cnLink && window.cnLink.is_open()) {
+        try {
+          const eventJson = JSON.stringify(event);
+          const bytes = new TextEncoder().encode(eventJson);
+          const kappa = console0.cn_put(bytes);
+          console0.cn_announce(kappa);
+          console0.cn_pump(window.cnLink);
+          console.log("WebRTC: Broadcasted event:", event.id, event.header.kind);
+        } catch (e) {
+          console.error("WebRTC: Failed to broadcast event:", event.id, e);
+        }
+      }
     },
 
     saveChannelReference(id, name) {
@@ -815,7 +1113,12 @@ Alpine.data("shell", () => {
     async joinChannel() {
       if (!this.inviteCodeInput) return;
       try {
-        const payload = JSON.parse(base64Decode(this.inviteCodeInput.trim()));
+        const decoded = base64Decode(this.inviteCodeInput.trim());
+        if (!decoded) {
+          alert("Invalid invite code format");
+          return;
+        }
+        const payload = JSON.parse(decoded);
         if (payload && payload.id && payload.genesisEvent) {
           // Recreate genesis event
           const gData = payload.genesisEvent;

@@ -734,7 +734,12 @@
       const code = prompt("Paste Workspace Invite Code:");
       if (!code) return;
       try {
-        const payload = JSON.parse(base64Decode(code.trim()));
+        const decoded = base64Decode(code.trim());
+        if (!decoded) {
+          alert("Invalid invite format.");
+          return;
+        }
+        const payload = JSON.parse(decoded);
         if (payload && payload.type === "WorkspaceInvite" && payload.id && payload.genesisEvent) {
           const gData = payload.genesisEvent;
           const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
@@ -852,7 +857,12 @@
     async importKeys() {
       if (!this.importInput) return;
       try {
-        const jwkObj = JSON.parse(base64Decode(this.importInput.trim()));
+        const decoded = base64Decode(this.importInput.trim());
+        if (!decoded) {
+          alert("Failed to import account. Ensure you pasted a valid Account Backup Payload.");
+          return;
+        }
+        const jwkObj = JSON.parse(decoded);
         const p = await Participant.importJwk(jwkObj);
         this.participant = p;
         localStorage.setItem("holoapps_participant_jwk", JSON.stringify(jwkObj));
