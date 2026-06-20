@@ -585,6 +585,23 @@ export class Event {
   }
 }
 
+function getShellInstance() {
+  if (typeof window === "undefined") return null;
+  if (window.shellInstance) return window.shellInstance;
+  const bodyShellEl = document.querySelector("body[x-data='shell']");
+  if (bodyShellEl && window.Alpine) {
+    return window.Alpine.$data(bodyShellEl);
+  }
+  const shellBlock = document.querySelector("shell-block");
+  if (shellBlock && shellBlock.shadowRoot) {
+    const wrapper = shellBlock.shadowRoot.querySelector(".shell-wrapper");
+    if (wrapper && window.Alpine) {
+      return window.Alpine.$data(wrapper);
+    }
+  }
+  return null;
+}
+
 /**
  * Collection — app-interpreted closure of an event DAG.
  * Scope of membership and confidentiality epochs.
@@ -650,6 +667,9 @@ export class Collection {
 
     // If it's a membership, epoch, or capability event, parse state rules immediately
     await this.applyPlatformEvent(event);
+    
+    // Dynamically update the active capabilities and members state
+    this.updateActiveState();
 
     return true;
   }
@@ -674,6 +694,35 @@ export class Collection {
 
     // App kinds require "write" capability
     return authorCaps.includes("write") || authorCaps.includes("admin");
+  }
+
+  /**
+   * Recomputes capabilities and members at the current heads frontier.
+   * Handles workspace member propagation to channel collections.
+   */
+  updateActiveState() {
+    this.capabilities = this.computeCapabilitiesAt(Array.from(this.heads));
+
+    // Check if this collection is a channel owned by a workspace
+    const shell = getShellInstance();
+    if (shell && shell.workspaces) {
+      for (const ws of shell.workspaces) {
+        if (ws.channels && ws.channels.some(ch => ch.id === this.id)) {
+          // Inherit members from workspace collection
+          if (ws.collection) {
+            for (const [mId, memberObj] of ws.collection.members.entries()) {
+              const wsCaps = ws.collection.capabilities.get(mId) || [];
+              const role = wsCaps.includes("admin") ? "admin" : "member";
+              this.members.set(mId, {
+                role: role,
+                curveId: memberObj.curveId || null
+              });
+            }
+          }
+          break;
+        }
+      }
+    }
   }
 
   /**
@@ -704,8 +753,9 @@ export class Collection {
     }
 
     // Check if this collection is a channel owned by a workspace
-    if (typeof window !== "undefined" && window.shellInstance && window.shellInstance.workspaces) {
-      for (const ws of window.shellInstance.workspaces) {
+    const shell = getShellInstance();
+    if (shell && shell.workspaces) {
+      for (const ws of shell.workspaces) {
         if (ws.channels && ws.channels.some(ch => ch.id === this.id)) {
           // Grant read/write capabilities to all workspace members
           if (ws.members) {
@@ -774,6 +824,19 @@ export class Collection {
         } else if (payload.action === "revoke") {
           this.members.delete(payload.target);
           this.capabilities.delete(payload.target);
+        }
+      }
+    }
+
+    if (event.header.kind === "add-member") {
+      const payload = event.body.cleartext || event.decodedPayload;
+      if (payload && payload.object && payload.object.type === "Person") {
+        const personId = payload.object.id;
+        if (personId) {
+          const caps = payload.object.capabilities || ["read", "write"];
+          const curveId = payload.object.curveId || null;
+          this.members.set(personId, { role: caps.includes("admin") ? "admin" : "member", curveId });
+          this.capabilities.set(personId, caps);
         }
       }
     }

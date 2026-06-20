@@ -229,76 +229,81 @@ server.listen(PORT, async () => {
     assert.ok(connected, "WebRTC Data Channel must successfully open between Alice and Bob!");
     console.log("✓ WebRTC connection established successfully!");
 
-    // 6. Alice selects `# general` channel and starts chat
-    console.log("Alice selecting general channel...");
-    await alicePage.locator(".sidebar-item:has-text('# general')").click();
-    await alicePage.locator("input.chat-input").waitFor({ timeout: 5000 });
-
-    // 7. Alice invites Bob to the channel to grant him write caps and rotate epoch key
-    let channelInviteCode = "";
+    // 6. Alice adds Bob to the workspace
+    console.log("Alice adding Bob to the workspace...");
     alicePage.removeAllListeners("dialog");
     alicePage.on("dialog", async dialog => {
       const message = dialog.message();
-      const type = dialog.type();
-      console.log(`[Alice Dialog] message: ${message}`);
-      if (type === "prompt") {
-        if (message.includes("Select a contact to invite")) {
-          await dialog.accept("new");
-        } else if (message.includes("Enter Invitee's Identity Address")) {
-          await dialog.accept(bobId);
-        } else if (message.includes("Enter Invitee's ECDH Public Exchange Key")) {
-          await dialog.accept(bobCurveId);
-        } else if (message.includes("Share this Invite Code")) {
-          channelInviteCode = dialog.defaultValue();
-          await dialog.accept(channelInviteCode);
-        } else {
-          await dialog.accept();
-        }
+      console.log(`[Alice Dialog] prompt for member: ${message}`);
+      if (dialog.type() === "prompt" && message.includes("Enter Member's Account ID")) {
+        await dialog.accept(bobId);
       } else {
         await dialog.accept();
       }
     });
+    await alicePage.locator("button:has-text('+ Member')").click();
+    
+    // Wait for Bob to sync and receive the add-member event
+    console.log("Waiting for Bob's workspace state to sync...");
+    await new Promise(r => setTimeout(r, 3000));
 
-    console.log("Alice inviting Bob to channel general...");
-    await alicePage.locator("button:has-text('Invite Peer')").click();
-    for (let i = 0; i < 50; i++) {
-      if (channelInviteCode) break;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    assert.ok(channelInviteCode, "Channel invite code must be generated");
-
-    // 8. Bob selects the general channel to listen for messages
+    // 7. Bob selects `# general` and sends a message directly (using inherited workspace capabilities!)
     console.log("Bob selecting general channel...");
     await bobPage.locator(".sidebar-item:has-text('# general')").click();
     await bobPage.locator("input.chat-input").waitFor({ timeout: 5000 });
 
-    // 9. Alice types and sends a secure message
-    console.log("Alice sending secure message...");
-    await alicePage.locator("input.chat-input").fill("Hello Bob, secure channel active!");
-    await alicePage.locator("button.send-btn").first().click();
-
-    // Wait for it to render in Alice's timeline
-    await alicePage.locator(".message-body-text:has-text('Hello Bob, secure channel active!')").waitFor({ timeout: 10000 });
-
-    // 10. Verify Bob automatically decrypts and reads Alice's message via WebRTC sync!
-    console.log("Bob waiting for Alice's decrypted message in timeline...");
-    const bobMsgText = bobPage.locator(".message-body-text:has-text('Hello Bob, secure channel active!')");
-    await bobMsgText.waitFor({ timeout: 15000 });
-    console.log("✓ Bob successfully decrypted and read Alice's message!");
-
-    // 11. Bob writes a reply message
-    console.log("Bob replying to Alice...");
-    await bobPage.locator("input.chat-input").fill("Hi Alice, verified decrypted!");
+    console.log("Bob sending message to general...");
+    await bobPage.locator("input.chat-input").fill("Hi Alice, writing directly via workspace permissions!");
     await bobPage.locator("button.send-btn").first().click();
 
-    // Wait for it to render in Bob's timeline
-    await bobPage.locator(".message-body-text:has-text('Hi Alice, verified decrypted!')").waitFor({ timeout: 10000 });
+    // Wait for it to render in Alice's timeline
+    console.log("Alice waiting for Bob's message in timeline...");
+    await alicePage.locator(".sidebar-item:has-text('# general')").click();
+    await alicePage.locator(".message-body-text:has-text('Hi Alice, writing directly via workspace permissions!')").waitFor({ timeout: 15000 });
+    console.log("✓ Bob successfully wrote directly to general channel!");
 
-    // 12. Verify Alice automatically decrypts and reads Bob's reply via WebRTC sync!
-    console.log("Alice waiting for Bob's decrypted reply in timeline...");
-    const aliceReplyText = alicePage.locator(".message-body-text:has-text('Hi Alice, verified decrypted!')");
-    await aliceReplyText.waitFor({ timeout: 15000 });
-    console.log("✓ Alice successfully decrypted and read Bob's reply!");
+    // 8. Alice promotes Bob to Workspace Admin
+    console.log("Alice promoting Bob to Workspace Admin...");
+    alicePage.removeAllListeners("dialog");
+    alicePage.on("dialog", async dialog => {
+      await dialog.accept();
+    });
+    await alicePage.locator(".sidebar-item:has-text('Workspace Dashboard')").click();
+    await alicePage.locator("button:has-text('Promote')").click();
+    
+    console.log("Waiting for Bob to sync admin status...");
+    await new Promise(r => setTimeout(r, 3000));
+
+    // 9. Bob creates a new channel '# custom-workspace-chan'
+    console.log("Bob creating new channel '# custom-workspace-chan'...");
+    await bobPage.locator("button:has-text('+ Channel')").click();
+    const chanNameInput = bobPage.locator("input[placeholder='Channel Name']");
+    await chanNameInput.waitFor({ timeout: 5000 });
+    await chanNameInput.fill("custom-workspace-chan");
+    await bobPage.locator(".dialog:has(h2:has-text('Create New Channel')) button:text-is('Create')").click();
+    await bobPage.locator(".sidebar-item:has-text('# custom-workspace-chan')").waitFor({ timeout: 10000 });
+    console.log("✓ Channel custom-workspace-chan created on Bob's side");
+
+    // 10. Alice verifies and selects the new channel in real-time
+    console.log("Alice waiting for new channel to appear in sidebar...");
+    await alicePage.locator(".sidebar-item:has-text('# custom-workspace-chan')").waitFor({ timeout: 15000 });
+    await alicePage.locator(".sidebar-item:has-text('# custom-workspace-chan')").click();
+    await alicePage.locator("input.chat-input").waitFor({ timeout: 5000 });
+    console.log("✓ Alice successfully discovered and selected the new channel in real-time!");
+
+    // 11. Alice sends a message in the custom channel
+    console.log("Alice sending message in custom channel...");
+    await alicePage.locator("input.chat-input").fill("Hello Bob, this new channel synced perfectly!");
+    await alicePage.locator("button.send-btn").first().click();
+
+    // Bob receives it in real-time!
+    console.log("Bob selecting custom channel...");
+    await bobPage.locator(".sidebar-item:has-text('# custom-workspace-chan')").click();
+    await bobPage.locator("input.chat-input").waitFor({ timeout: 5000 });
+
+    console.log("Bob waiting for Alice's message in custom channel...");
+    await bobPage.locator(".message-body-text:has-text('Hello Bob, this new channel synced perfectly!')").waitFor({ timeout: 15000 });
+    console.log("✓ Bob successfully received Alice's message in the new channel!");
 
     // Check for any console exceptions or warnings
     if (aliceErrors.length > 0) {

@@ -536,28 +536,43 @@
       if (!saved || saved.length === 0) {
         saved = JSON.parse(localStorage.getItem("holoapps_workspaces") || "[]");
       }
+      const oldWorkspaces = this.workspaces || [];
       this.workspaces = [];
       
       for (const wsRef of saved) {
         const col = new Collection(wsRef.id, workspaceReducer);
         const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${wsRef.id}`) || "[]");
+        const events = [];
         for (const evId of eventIds) {
           const raw = localStorage.getItem(`holoapps_event:${evId}`);
           if (raw) {
             try {
-              const evData = JSON.parse(raw);
-              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-              await col.addEvent(ev);
+              events.push(JSON.parse(raw));
             } catch(e) {}
           }
         }
+        events.sort((a, b) => (a.header?.clock || 0) - (b.header?.clock || 0));
+        for (const evData of events) {
+          const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+          await col.addEvent(ev);
+        }
         
         const state = await col.render();
+        const oldWorkspace = oldWorkspaces.find(w => w.id === wsRef.id);
+        const oldChannels = oldWorkspace ? oldWorkspace.channels : [];
+
         this.workspaces.push({
           id: wsRef.id,
           name: state.name || wsRef.name,
           collection: col,
-          channels: state.channels || [],
+          channels: (state.channels || []).map(ch => {
+            const existing = oldChannels.find(c => c.id === ch.id);
+            return {
+              id: ch.id,
+              name: ch.name,
+              collection: existing ? existing.collection : null
+            };
+          }),
           members: state.members || []
         });
       }
@@ -791,6 +806,20 @@
       const memberId = prompt("Enter Member's Account ID:");
       if (!memberId) return;
 
+      let curveId = "";
+      const contact = this.contacts.find(c => c.id === memberId);
+      if (contact && contact.curveId) {
+        curveId = contact.curveId;
+      } else {
+        for (const w of this.workspaces) {
+          const mObj = w.collection.members.get(memberId);
+          if (mObj && mObj.curveId) {
+            curveId = mObj.curveId;
+            break;
+          }
+        }
+      }
+
       const wsCol = this.activeWorkspace.collection;
       const parents = Array.from(wsCol.heads);
       let maxClock = 0;
@@ -810,7 +839,8 @@
           "type": "Add",
           "object": {
             "type": "Person",
-            "id": memberId
+            "id": memberId,
+            "curveId": curveId
           },
           "target": {
             "type": "Group",
@@ -1166,13 +1196,19 @@
       if (!ch.collection) {
         const col = new Collection(ch.id, messengerReducer);
         const eventIds = JSON.parse(localStorage.getItem(`holoapps_col_events:${ch.id}`) || "[]");
+        const events = [];
         for (const evId of eventIds) {
           const raw = localStorage.getItem(`holoapps_event:${evId}`);
           if (raw) {
-            const evData = JSON.parse(raw);
-            const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-            await col.addEvent(ev);
+            try {
+              events.push(JSON.parse(raw));
+            } catch(e) {}
           }
+        }
+        events.sort((a, b) => (a.header?.clock || 0) - (b.header?.clock || 0));
+        for (const evData of events) {
+          const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+          await col.addEvent(ev);
         }
         ch.collection = col;
       }
