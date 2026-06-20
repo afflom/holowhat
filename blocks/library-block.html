@@ -236,7 +236,9 @@
 </div>
 
 <script type="module">
-  import AlpineBlock from "https://playground.now/assets/scripts/alpine-block.js"
+  const origin = window.location.origin;
+  const base = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+  const { default: AlpineBlock } = await import(`${origin}${base}/assets/scripts/alpine-block.js`);
 
   function defineBlock(pkg, tagName, template) {
     if (!customElements.get(tagName)) {

@@ -13,7 +13,7 @@
 
 <script type="module">
   const origin = window.location.origin
-  const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : ""
+  const base = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
   const { Participant } = await import(`${origin}${base}/assets/scripts/holo-apps.js`)
 
   export default {

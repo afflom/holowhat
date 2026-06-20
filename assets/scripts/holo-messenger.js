@@ -73,6 +73,15 @@ export function messengerReducer(events) {
         }
         msg.reactions.get(symbol).add(ev.author);
       }
+    } else if (ev.kind === "delete" || type === "Delete") {
+      const targetId = payload.object?.id || payload.target || (typeof payload.object === "string" ? payload.object : null);
+      if (targetId && messageMap.has(targetId)) {
+        const msg = messageMap.get(targetId);
+        // Only the original author can retract their message
+        if (msg.author === ev.author) {
+          messageMap.delete(targetId);
+        }
+      }
     }
   }
 
@@ -121,7 +130,7 @@ export async function createMessengerApp(participant) {
     "holo-messenger",
     reducerId,
     projectionId,
-    ["message", "reaction", "edit"],
+    ["message", "reaction", "edit", "delete"],
     ["read", "write"],
     participant
   );

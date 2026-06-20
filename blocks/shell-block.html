@@ -207,7 +207,7 @@
 
 <script type="module">
   const origin = window.location.origin;
-  const base = window.location.pathname.startsWith("/holowhat") ? "/holowhat" : "";
+  const base = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
   const { Participant, Event, Collection, App, canonicalJson, sha256, HoloAppsCrypto, base64Encode, base64Decode } = await import(`${origin}${base}/assets/scripts/holo-apps.js`);
   const { messengerReducer, createMessengerApp } = await import(`${origin}${base}/assets/scripts/holo-messenger.js`);
 
