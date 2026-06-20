@@ -770,11 +770,19 @@ export class Collection {
       for (const ws of listToCheck) {
         const isChannel = ws.channels && ws.channels.some(ch => ch.id === this.id);
         if (isChannel) {
-          // Grant read/write capabilities to all workspace members
+          // Grant read/write capabilities to all workspace members conditionally based on writePolicy
+          const channelGenesis = this.events.get(this.id);
+          const channelPayload = channelGenesis ? (channelGenesis.body.cleartext || channelGenesis.decodedPayload || {}) : {};
+          const writePolicy = channelPayload.writePolicy || "all";
+
           if (ws.members) {
             for (const mId of ws.members) {
               if (!localCaps.has(mId)) {
-                localCaps.set(mId, ["read", "write"]);
+                if (writePolicy === "creator") {
+                  localCaps.set(mId, ["read"]);
+                } else {
+                  localCaps.set(mId, ["read", "write"]);
+                }
               }
             }
           }
