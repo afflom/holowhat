@@ -723,9 +723,17 @@
         };
 
         const serialized = base64Encode(JSON.stringify(payload));
+        try {
+          navigator.clipboard.writeText(serialized).catch(err => {
+            console.log("Failed to copy to clipboard automatically:", err);
+          });
+        } catch (e) {
+          // Ignore synchronous clipboard API errors
+        }
         prompt("Share this Workspace Invite Code:", serialized);
+        console.log("Generated Workspace Invite Code:\n", serialized);
       } catch (e) {
-        console.error(e);
+        console.error("exportActiveWorkspaceInvite error:", e);
         alert("Failed to export workspace invite.");
       }
     },
@@ -736,6 +744,7 @@
       try {
         const decoded = base64Decode(code.trim());
         if (!decoded) {
+          console.error("joinWorkspacePrompt error: Failed to decode invite code. Input may be invalid base64 or truncated:", code);
           alert("Invalid invite format.");
           return;
         }
@@ -788,44 +797,49 @@
           alert("Joined workspace successfully!");
         } else {
           // Fallback to legacy single channel invite code
-          const gData = payload.genesisEvent;
-          const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
-          
-          const col = new Collection(genesis.id, messengerReducer);
-          await col.addEvent(genesis);
-          this.saveEvent(genesis);
-          this.saveChannelRef(genesis.id, payload.name || "Joined Channel");
+          if (payload && payload.genesisEvent) {
+            const gData = payload.genesisEvent;
+            const genesis = new Event(gData.header, gData.body, gData.signature, gData.id);
+            
+            const col = new Collection(genesis.id, messengerReducer);
+            await col.addEvent(genesis);
+            this.saveEvent(genesis);
+            this.saveChannelRef(genesis.id, payload.name || "Joined Channel");
 
-          if (payload.events) {
-            for (const evData of payload.events) {
-              const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
-              await col.addEvent(ev);
-              this.saveEvent(ev);
+            if (payload.events) {
+              for (const evData of payload.events) {
+                const ev = new Event(evData.header, evData.body, evData.signature, evData.id);
+                await col.addEvent(ev);
+                this.saveEvent(ev);
+              }
             }
-          }
 
-          for (const ev of col.events.values()) {
-            if (ev.header.kind === "epoch") {
-              await col.unwrapAndStoreEpochKey(ev, this.participant);
+            for (const ev of col.events.values()) {
+              if (ev.header.kind === "epoch") {
+                await col.unwrapAndStoreEpochKey(ev, this.participant);
+              }
             }
-          }
 
-          const existingCh = this.channels.find(c => c.id === genesis.id);
-          if (existingCh) {
-            existingCh.collection = col;
-            if (payload.name) {
-              existingCh.name = payload.name;
+            const existingCh = this.channels.find(c => c.id === genesis.id);
+            if (existingCh) {
+              existingCh.collection = col;
+              if (payload.name) {
+                existingCh.name = payload.name;
+              }
+            } else {
+              this.channels.push({
+                id: genesis.id,
+                name: payload.name || "Joined Channel",
+                collection: col
+              });
             }
           } else {
-            this.channels.push({
-              id: genesis.id,
-              name: payload.name || "Joined Channel",
-              collection: col
-            });
+            console.error("joinWorkspacePrompt error: Invalid payload structure or missing genesisEvent. Payload:", payload);
+            alert("Invalid invite format.");
           }
         }
       } catch (e) {
-        console.error(e);
+        console.error("joinWorkspacePrompt error: Exception caught during processing:", e);
         alert("Invalid invite format.");
       }
     },

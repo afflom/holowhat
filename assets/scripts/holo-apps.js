@@ -109,6 +109,7 @@ export function base64Decode(str) {
   // Guard: if it's not a valid base64 character set, return empty string cleanly
   const validBase64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
   if (!validBase64Regex.test(cleanStr)) {
+    console.error("base64Decode error: Input contains invalid characters or has been truncated (e.g. with '...'). Cleaned input:", cleanStr);
     return "";
   }
 
