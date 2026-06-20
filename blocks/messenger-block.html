@@ -193,7 +193,12 @@
                 <span class="cap-badge" :class="cap" x-text="cap"></span>
               </template>
             </div>
-            <button class="inspect-did-btn" @click="inspectDid(m.id)">Inspect W3C DID</button>
+            <div class="member-actions-row" style="display: flex; gap: 4px; margin-top: 6px;">
+              <button class="inspect-did-btn" @click="inspectDid(m.id)">Inspect DID</button>
+              <template x-if="m.id !== getShell().participant.id && (getCollection()?.capabilities?.get(getShell().participant.id) || []).includes('admin')">
+                <button class="revoke-member-btn" @click="revoke(m.id)">Revoke</button>
+              </template>
+            </div>
           </div>
         </template>
       </div>
@@ -218,7 +223,7 @@
 <script type="module">
   const origin = window.location.origin;
   const base = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
-  const { Event, canonicalJson, sha256, base64Encode, base64Decode, HoloAppsCrypto } = await import(`${origin}${base}/assets/scripts/holo-apps.js`);
+  const { Event, canonicalJson, sha256, base64Encode, base64Decode, HoloAppsCrypto, idToDidKey, didKeyToId, resolveDid } = await import(`${origin}${base}/assets/scripts/holo-apps.js`);
 
   export default {
     mixins: [],
@@ -508,34 +513,10 @@
       return members;
     },
 
-    inspectDid(userId) {
-      const didDocument = {
-        "@context": [
-          "https://www.w3.org/ns/did/v1",
-          "https://w3id.org/security/suites/jws-2020/v1"
-        ],
-        "id": `did:key:${userId}`,
-        "verificationMethod": [
-          {
-            "id": `did:key:${userId}#key-1`,
-            "type": "JsonWebKey2020",
-            "controller": `did:key:${userId}`,
-            "publicKeyJwk": {
-              "kty": "EC",
-              "crv": "P-256",
-              "x": userId.substring(2, 66),
-              "y": userId.substring(66, 130)
-            }
-          }
-        ],
-        "authentication": [
-          `did:key:${userId}#key-1`
-        ],
-        "assertionMethod": [
-          `did:key:${userId}#key-1`
-        ]
-      };
-      prompt(`W3C DID Core Document for key did:key:${userId.substring(0, 8)}...`, JSON.stringify(didDocument, null, 2));
+    async inspectDid(userId) {
+      const did = await idToDidKey(userId);
+      const didDocument = await resolveDid(did);
+      prompt(`W3C DID Core Document for key ${did.substring(0, 16)}...`, JSON.stringify(didDocument, null, 2));
     },
 
     // Replying and scroll tools
@@ -929,6 +910,94 @@
 
       const serialized = base64Encode(JSON.stringify(inviteObj));
       prompt("Share this Invite Code with the invitee:", serialized);
+    },
+
+    async revoke(targetId) {
+      const col = this.getCollection();
+      if (!col) return;
+
+      const shell = this.getShell();
+      if (!shell) return;
+      const p = shell.participant;
+
+      if (targetId === p.id) {
+        alert("You cannot revoke your own access.");
+        return;
+      }
+
+      const myCaps = col.capabilities.get(p.id) || [];
+      if (!myCaps.includes("admin")) {
+        alert("Only admins can revoke membership.");
+        return;
+      }
+
+      const parents = Array.from(col.heads);
+      let maxClock = 0;
+      for (const pId of parents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > maxClock) maxClock = parent.header.clock;
+      }
+
+      const revokeEvent = await Event.create({
+        kind: "membership",
+        author: p.id,
+        collectionId: col.id,
+        parents,
+        clock: maxClock + 1,
+        payload: {
+          target: targetId,
+          action: "revoke"
+        }
+      }, p);
+
+      const revokeAdded = await col.addEvent(revokeEvent);
+      if (!revokeAdded) {
+        alert("Failed to revoke membership.");
+        return;
+      }
+      this.saveEventOnShell(shell, revokeEvent);
+
+      const epochKey = await HoloAppsCrypto.generateEpochKey();
+
+      const wrappedKeys = {};
+      wrappedKeys[p.id] = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, p.curveId);
+
+      for (const [mId, memberInfo] of col.members.entries()) {
+        if (mId === targetId || mId === p.id) continue;
+        if (memberInfo && memberInfo.curveId) {
+          wrappedKeys[mId] = await HoloAppsCrypto.wrapEpochKey(epochKey, p.curveKeys.privateKey, memberInfo.curveId);
+        }
+      }
+
+      const epochParents = Array.from(col.heads);
+      let epochMaxClock = 0;
+      for (const pId of epochParents) {
+        const parent = col.events.get(pId);
+        if (parent && parent.header.clock > epochMaxClock) epochMaxClock = parent.header.clock;
+      }
+
+      const epochEvent = await Event.create({
+        kind: "epoch",
+        author: p.id,
+        collectionId: col.id,
+        parents: epochParents,
+        clock: epochMaxClock + 1,
+        payload: {
+          senderCurveId: p.curveId,
+          wrappedKeys
+        }
+      }, p);
+
+      const epochAdded = await col.addEvent(epochEvent);
+      if (!epochAdded) {
+        alert("Failed to update security keys after revocation.");
+        return;
+      }
+      this.saveEventOnShell(shell, epochEvent);
+      col.epochKeys.set(epochEvent.id, epochKey);
+      col.currentEpochId = epochEvent.id;
+
+      await this.refresh();
     }
   }
 </script>
@@ -1821,5 +1890,20 @@
   }
   .cancel:hover {
     background: #334155;
+  }
+  .revoke-member-btn {
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    font-size: 0.7rem;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .revoke-member-btn:hover {
+    color: white;
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
   }
 </style>

@@ -125,6 +125,124 @@ export function base64Decode(str) {
  * Helper to compute SHA-256 hash (content address κ) of a string.
  * Supports HashAxis verification (Law L5/SEC-1).
  */
+export const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+export function base58Encode(bytes) {
+  let result = "";
+  let x = BigInt(0);
+  for (const b of bytes) {
+    x = (x << 8n) + BigInt(b);
+  }
+  while (x > 0n) {
+    const remainder = Number(x % 58n);
+    x = x / 58n;
+    result = BASE58_ALPHABET[remainder] + result;
+  }
+  for (const b of bytes) {
+    if (b === 0) {
+      result = BASE58_ALPHABET[0] + result;
+    } else {
+      break;
+    }
+  }
+  return result;
+}
+
+export function base58Decode(str) {
+  let x = BigInt(0);
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const value = BASE58_ALPHABET.indexOf(char);
+    if (value === -1) throw new Error("Invalid base58 character");
+    x = x * 58n + BigInt(value);
+  }
+  const bytes = [];
+  while (x > 0n) {
+    bytes.unshift(Number(x & 0xffn));
+    x = x >> 8n;
+  }
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === BASE58_ALPHABET[0]) {
+      bytes.unshift(0);
+    } else {
+      break;
+    }
+  }
+  return new Uint8Array(bytes);
+}
+
+export async function idToDidKey(hexPublicKey) {
+  if (!hexPublicKey) return "";
+  const bytes = new Uint8Array(hexPublicKey.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+  const prefix = new Uint8Array([0x80, 0x24]); // multicodec p256-pub
+  const combined = new Uint8Array(prefix.length + bytes.length);
+  combined.set(prefix, 0);
+  combined.set(bytes, prefix.length);
+  return "did:key:z" + base58Encode(combined);
+}
+
+export function didKeyToId(did) {
+  if (!did) return "";
+  if (!did.startsWith("did:key:z")) {
+    if (did.startsWith("did:key:")) {
+      return did.substring(8);
+    }
+    return did;
+  }
+  const encoded = did.substring(9);
+  const bytes = base58Decode(encoded);
+  if (bytes[0] === 0x80 && bytes[1] === 0x24) {
+    const rawKeyBytes = bytes.slice(2);
+    return Array.from(rawKeyBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  throw new Error("Invalid multicodec prefix for p256-pub");
+}
+
+export async function resolveDid(did) {
+  try {
+    const publicKeyHex = didKeyToId(did);
+    return {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/jws-2020/v1"
+      ],
+      "id": did,
+      "verificationMethod": [
+        {
+          "id": `${did}#key-1`,
+          "type": "JsonWebKey2020",
+          "controller": did,
+          "publicKeyJwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": base64UrlEncode(publicKeyHex.substring(2, 66)),
+            "y": base64UrlEncode(publicKeyHex.substring(66, 130))
+          }
+        }
+      ],
+      "authentication": [`${did}#key-1`],
+      "assertionMethod": [`${did}#key-1`],
+      "capabilityInvocation": [`${did}#key-1`],
+      "capabilityDelegation": [`${did}#key-1`]
+    };
+  } catch (e) {
+    console.error("resolveDid error:", e);
+    return null;
+  }
+}
+
+function base64UrlEncode(hexStr) {
+  const bytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
 export async function sha256(text) {
   const msgUint8 = new TextEncoder().encode(text);
   const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
@@ -486,6 +604,9 @@ export class Collection {
     // Encryption Epochs state
     this.epochKeys = new Map(); // epochId (event κ) -> CryptoKey
     this.currentEpochId = "genesis";
+    
+    // Platform-level Tombstoning
+    this.tombstones = new Set();
   }
 
   /**
@@ -626,6 +747,16 @@ export class Collection {
     if (event.header.kind === "epoch") {
       this.currentEpochId = event.id;
     }
+
+    if (event.header.kind === "tombstone") {
+      const payload = await this.decryptEventBody(event);
+      if (payload) {
+        const targetId = payload.target || payload.object?.id;
+        if (targetId) {
+          this.tombstones.add(targetId);
+        }
+      }
+    }
   }
 
   /**
@@ -731,6 +862,9 @@ export class Collection {
     const decryptedPayloads = [];
 
     for (const ev of sortedEvents) {
+      if (this.tombstones.has(ev.id)) {
+        continue;
+      }
       if (ev.header.kind === "membership" || ev.header.kind === "epoch" || ev.header.kind === "tombstone") {
         continue; // Platform kinds are handled by membership/epochs mapping
       }
@@ -746,7 +880,13 @@ export class Collection {
       }
     }
 
-    return this.reducer(decryptedPayloads);
+    try {
+      const reducerCode = this.reducer.toString();
+      return await runInSandbox(reducerCode, decryptedPayloads);
+    } catch (e) {
+      console.warn("Sandbox execution failed, falling back to local thread:", e);
+      return this.reducer(decryptedPayloads);
+    }
   }
 }
 
@@ -842,4 +982,184 @@ export class Shell {
     this.activeCollections.set(collection.id, collection);
     return await collection.render();
   }
+}
+
+let sandboxIframe = null;
+const sandboxRequests = new Map();
+let nextRequestId = 1;
+let sandboxReady = false;
+const sandboxQueue = [];
+
+function getSandboxIframe() {
+  if (typeof document === "undefined") {
+    throw new Error("DOM document is not available");
+  }
+  if (sandboxIframe) return sandboxIframe;
+  
+  sandboxIframe = document.createElement("iframe");
+  sandboxIframe.setAttribute("sandbox", "allow-scripts");
+  sandboxIframe.style.display = "none";
+  sandboxIframe.srcdoc = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <script>
+        // Send a message when loaded and ready
+        window.parent.postMessage({ type: "ready" }, "*");
+        window.addEventListener("message", (e) => {
+          const { action, reducerCode, events, requestId } = e.data;
+          if (action === "reduce") {
+            try {
+              const reducerFn = new Function("events", "return (" + reducerCode + ")(events);");
+              const result = reducerFn(events);
+              window.parent.postMessage({ type: "response", requestId, result }, "*");
+            } catch (err) {
+              window.parent.postMessage({ type: "error", requestId, error: err.message }, "*");
+            }
+          }
+        });
+      </script>
+    </head>
+    <body></body>
+    </html>
+  `;
+  
+  window.addEventListener("message", (e) => {
+    if (!e.data) return;
+    if (e.data.type === "ready") {
+      sandboxReady = true;
+      while (sandboxQueue.length > 0) {
+        const item = sandboxQueue.shift();
+        try {
+          sandboxIframe.contentWindow.postMessage(item.msg, "*");
+        } catch (err) {
+          item.reject(err);
+        }
+      }
+      return;
+    }
+    if (e.data.requestId) {
+      const req = sandboxRequests.get(e.data.requestId);
+      if (req) {
+        sandboxRequests.delete(e.data.requestId);
+        if (e.data.type === "response") {
+          req.resolve(e.data.result);
+        } else {
+          req.reject(new Error(e.data.error));
+        }
+      }
+    }
+  });
+
+  document.body.appendChild(sandboxIframe);
+  return sandboxIframe;
+}
+
+export function runInSandbox(reducerCode, events) {
+  const iframe = getSandboxIframe();
+  const requestId = nextRequestId++;
+  
+  // JSON-serialize/deserialize events to avoid proxy/DataCloneError in postMessage
+  const cleanEvents = JSON.parse(JSON.stringify(events));
+  const msg = {
+    action: "reduce",
+    reducerCode,
+    events: cleanEvents,
+    requestId
+  };
+  
+  return new Promise((resolve, reject) => {
+    sandboxRequests.set(requestId, { resolve, reject });
+    if (sandboxReady) {
+      try {
+        iframe.contentWindow.postMessage(msg, "*");
+      } catch (err) {
+        sandboxRequests.delete(requestId);
+        reject(err);
+      }
+    } else {
+      sandboxQueue.push({ msg, reject });
+    }
+  });
+}
+
+export async function encryptPayload(cleartext, passphrase) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  const encoder = new TextEncoder();
+  const passwordKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(passphrase),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+  
+  const aesKey = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    passwordKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"]
+  );
+  
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    encoder.encode(cleartext)
+  );
+  
+  const result = {
+    salt: Array.from(salt).map(b => b.toString(16).padStart(2, "0")).join(""),
+    iv: Array.from(iv).map(b => b.toString(16).padStart(2, "0")).join(""),
+    ciphertext: Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, "0")).join("")
+  };
+  return "encrypted:" + base64Encode(JSON.stringify(result));
+}
+
+export async function decryptPayload(encryptedString, passphrase) {
+  if (!encryptedString.startsWith("encrypted:")) {
+    throw new Error("Invalid encrypted payload format");
+  }
+  const rawPayload = base64Decode(encryptedString.substring(10));
+  const { salt: saltHex, iv: ivHex, ciphertext: ctHex } = JSON.parse(rawPayload);
+  
+  const salt = new Uint8Array(saltHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+  const iv = new Uint8Array(ivHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+  const ciphertext = new Uint8Array(ctHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+  
+  const encoder = new TextEncoder();
+  const passwordKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(passphrase),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"]
+  );
+  
+  const aesKey = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 100000,
+      hash: "SHA-256"
+    },
+    passwordKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"]
+  );
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    ciphertext
+  );
+  return new TextDecoder().decode(decrypted);
 }
