@@ -407,8 +407,10 @@ window.throttledChange = (fn) => {
 }
 
 function createObserved(doc) {
+  // Convert Automerge proxy to plain JS object first to avoid unsafe recursive Rust/WASM borrowing
+  const plainDoc = doc ? JSON.parse(JSON.stringify(doc)) : {};
   return new Observer(
-    structuredClone(doc),
+    plainDoc,
     (evt) => {
       if (!handle) return
       if (window.lock === true) {
@@ -515,15 +517,15 @@ Alpine.data("playground", () => {
                   await new Promise(res => setTimeout(res, 50));
                 }
                 if (resolvedBytes) {
+                  const isAutomerge = resolvedBytes && resolvedBytes.length >= 4 &&
+                    resolvedBytes[0] === 133 && resolvedBytes[1] === 111 &&
+                    resolvedBytes[2] === 74 && resolvedBytes[3] === 131;
+
                   const dataArray = Array.from(resolvedBytes);
                   const dataJson = JSON.stringify(dataArray);
                   localStorage.setItem("hs-doc-data:" + kappa, dataJson);
-                  localStorage.setItem("hs-doc-data:document/" + docUrl, dataJson);
-                  localStorage.setItem("hs-doc-data:" + docUrl + "/snapshot/bootstrap", dataJson);
-                  localStorage.setItem("hs-doc-kappa:document/" + docUrl, kappa);
-                  localStorage.setItem("hs-doc-kappa:" + docUrl, kappa);
                   
-                  if (handle) {
+                  if (handle && isAutomerge) {
                     try {
                       const remoteDoc = Automerge.load(new Uint8Array(resolvedBytes));
                       handle.change(doc => {
@@ -531,10 +533,17 @@ Alpine.data("playground", () => {
                       });
                       console.log("Synced remote changes successfully!");
                     } catch (e) {
-                      console.error("Failed to merge remote document:", e);
+                      console.log("Info: Not merging remote chunk (may be incremental change):", e.message || e);
                     }
+                  } else if (isAutomerge) {
+                    // Populate document keys for initial boot of repository handle
+                    localStorage.setItem("hs-doc-data:document/" + docUrl, dataJson);
+                    localStorage.setItem("hs-doc-data:" + docUrl + "/snapshot/bootstrap", dataJson);
+                    localStorage.setItem("hs-doc-kappa:document/" + docUrl, kappa);
+                    localStorage.setItem("hs-doc-kappa:" + docUrl, kappa);
+                    console.log("Downloaded document bytes. Storage populated.");
                   } else {
-                    console.log("Downloaded document bytes. Storage populated for docUrl:", docUrl);
+                    console.log("Downloaded metadata bytes. Storage populated.");
                   }
                 }
               }
@@ -604,6 +613,20 @@ async function loadPackagesAndBlocks(doc) {
 
 async function loadDocument() {
   try {
+    let attempt = 0;
+    while (
+      !localStorage.getItem("hs-doc-kappa:document/" + docUrl) &&
+      !localStorage.getItem("hs-doc-data:document/" + docUrl) &&
+      !localStorage.getItem("hs-doc-kappa:" + docUrl) &&
+      !localStorage.getItem("hs-doc-data:" + docUrl)
+    ) {
+      if (attempt % 10 === 0) {
+        console.log("Waiting for document " + docUrl + " to be populated via sync...");
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
+      attempt++;
+    }
+
     handle = await findWithBackoff(docUrl);
     handle.change(doc => {
       if (!doc.world) {

@@ -106,7 +106,12 @@ export function base64Decode(str) {
     cleanStr += "=";
   }
 
-  return decodeURIComponent(escape(atob(cleanStr)));
+  try {
+    return decodeURIComponent(escape(atob(cleanStr)));
+  } catch (e) {
+    console.warn("base64Decode: Failed to decode base64 string:", e.message);
+    return "";
+  }
 }
 
 /**
@@ -493,7 +498,7 @@ export class Collection {
     // Verify parents are already imported (causality check)
     for (const parentId of event.header.parents) {
       if (!this.events.has(parentId)) {
-        console.warn(`Collection ${this.id}: Missing causal parent ${parentId} for event ${event.id}`);
+        console.log(`Collection ${this.id}: Missing causal parent ${parentId} for event ${event.id}`);
         return false;
       }
     }

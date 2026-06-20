@@ -1,11 +1,15 @@
 <script type="module">
   export default {
-    lastChange: JSON.stringify(handle.doc().world),
+    lastChange: "",
     syncDocToWorld,
 
     init() {
-      this.syncDocToWorld(handle.doc(), this.$host)
+      if (handle) {
+        this.lastChange = JSON.stringify(handle.doc().world)
+        this.syncDocToWorld(handle.doc(), this.$host)
+      }
       this.$watch("doc.world", (newVal, oldVal) => {
+        if (!handle) return
         if (this.lastChange === JSON.stringify(handle.doc().world)) return
 
         this.syncDocToWorld(handle.doc(), this.$host)

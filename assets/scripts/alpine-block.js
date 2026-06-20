@@ -293,7 +293,8 @@ export default class AlpineBlock extends HTMLElement {
   }
 
   syncToDoc(action) {
-    handle.change((doc) => {
+    if (!window.handle) return
+    window.handle.change((doc) => {
       const idx = doc.world.findIndex((n) => n.id === this.id)
 
       if (action === "remove") {
@@ -368,12 +369,13 @@ export default class AlpineBlock extends HTMLElement {
     super.setAttribute(name, value)
 
     if (
+      window.handle &&
       !syncing &&
       name !== "id" &&
       !name.startsWith(":") &&
       !name.startsWith("@")
     ) {
-      const entry = handle.doc().world?.find((n) => n.id === this.id)
+      const entry = window.handle.doc().world?.find((n) => n.id === this.id)
       if (entry && this.needsSync(entry)) {
         this.syncToDoc("update")
       }
@@ -384,12 +386,13 @@ export default class AlpineBlock extends HTMLElement {
     super.removeAttribute(name)
 
     if (
+      window.handle &&
       !syncing &&
       name !== "id" &&
       !name.startsWith(":") &&
       !name.startsWith("@")
     ) {
-      const entry = handle.doc().world.find((n) => n.id === this.id)
+      const entry = window.handle.doc().world.find((n) => n.id === this.id)
       if (entry && this.needsSync(entry)) {
         this.syncToDoc("update")
       }
@@ -403,7 +406,8 @@ export default class AlpineBlock extends HTMLElement {
 
     this.id ||= "pg" + crypto.randomUUID().replace(/-/g, "")
 
-    const existing = handle.doc().world.find((n) => n.id === this.id)
+    if (!window.handle) return
+    const existing = window.handle.doc().world.find((n) => n.id === this.id)
 
     if (!existing) {
       this.syncToDoc("add")
@@ -421,7 +425,8 @@ export default class AlpineBlock extends HTMLElement {
   disconnectedCallback() {
     this.observer?.disconnect()
 
-    const exists = handle.doc().world.find((n) => n.id === this.id)
+    if (!window.handle) return
+    const exists = window.handle.doc().world.find((n) => n.id === this.id)
 
     if (exists) {
       this.syncToDoc("remove")

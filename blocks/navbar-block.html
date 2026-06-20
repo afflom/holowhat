@@ -115,9 +115,18 @@
     init() {
       this.doc.fontSize = this.doc.fontSize || 16;
       this.googleFonts()
-      this.numOps = this.formatStats(handle.doc());
-      
-      handle.on("change", ({ doc }) => (this.numOps = this.formatStats(doc)));
+      if (handle) {
+        this.numOps = this.formatStats(handle.doc());
+        handle.on("change", ({ doc }) => (this.numOps = this.formatStats(doc)));
+      } else {
+        const checkInterval = setInterval(() => {
+          if (handle) {
+            clearInterval(checkInterval);
+            this.numOps = this.formatStats(handle.doc());
+            handle.on("change", ({ doc }) => (this.numOps = this.formatStats(doc)));
+          }
+        }, 100);
+      }
 
       setInterval(() => {
         const now = Date.now();
@@ -250,4 +259,4 @@
     width: 12px;
     height: 12px;
   }
-</style
+</style>
