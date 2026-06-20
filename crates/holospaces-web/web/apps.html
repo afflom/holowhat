@@ -180,11 +180,14 @@
                       <div class="widget-meter-fill" :style="{ width: activeWorkspace ? Math.min(activeWorkspace.collection.heads.size * 33, 100) + '%' : '0%' }" style="background: #10b981;"></div>
                     </div>
                   </div>
-                  <div class="widget-card">
-                    <div class="widget-header">WebRTC Swarm Status</div>
-                    <div class="widget-value" style="color: var(--success); font-size: 1.15rem;">CONNECTED (Online)</div>
+                  <div class="widget-card" @click="showWebRtcModal = true" style="cursor: pointer; position: relative;">
+                    <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
+                      <span>WebRTC Swarm Status</span>
+                      <span style="font-size: 0.7rem; color: var(--accent); border: 1px solid var(--accent); padding: 1px 5px; border-radius: 4px;">🔗 Link</span>
+                    </div>
+                    <div class="widget-value" :style="{ color: isWebRtcConnected ? 'var(--success)' : 'var(--error)' }" x-text="isWebRtcConnected ? 'CONNECTED (Online)' : 'DISCONNECTED (Offline)'" style="font-size: 1.15rem;">DISCONNECTED (Offline)</div>
                     <div class="widget-meter">
-                      <div class="widget-meter-fill" style="width: 100%; background: var(--success);"></div>
+                      <div class="widget-meter-fill" :style="{ width: isWebRtcConnected ? '100%' : '15%', background: isWebRtcConnected ? 'var(--success)' : 'var(--error)' }"></div>
                     </div>
                   </div>
                 </div>
@@ -638,6 +641,67 @@
             <button class="btn btn-secondary" @click="exportIdentity()">Export Account Backup</button>
             <button class="btn btn-secondary" style="background: var(--error);" @click="clearIdentity()">Wipe Account Data</button>
             <button class="btn btn-success" @click="showIdentityDetails = false">Close</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- P2P WebRTC Connection Modal -->
+    <template x-if="showWebRtcModal">
+      <div class="overlay">
+        <div class="dialog glass" style="max-width: 600px; width: 100%;">
+          <h2>P2P WebRTC Connection Link</h2>
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4;">
+              Establish a direct, serverless peer-to-peer WebRTC connection with another peer to sync updates in real-time.
+            </p>
+            
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <button class="btn" :class="{ 'btn-secondary': webrtcRole !== 'initiate' }" @click="webrtcRole = 'initiate'" style="flex: 1;">A: Initiate (Offerer)</button>
+              <button class="btn" :class="{ 'btn-secondary': webrtcRole !== 'receive' }" @click="webrtcRole = 'receive'" style="flex: 1;">B: Accept (Answerer)</button>
+            </div>
+            
+            <template x-if="webrtcRole === 'initiate'">
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button class="btn" @click="generateOffer()">1. Generate Offer Connection Code</button>
+                
+                <template x-if="webrtcOfferCode">
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Share this Offer Code with your peer:</label>
+                    <textarea class="input" style="height: 100px; font-family: monospace; font-size: 0.75rem;" readonly x-text="webrtcOfferCode" onclick="this.select()"></textarea>
+                    <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px;" @click="navigator.clipboard.writeText(webrtcOfferCode); alert('Offer Code copied to clipboard!')">Copy Offer Code</button>
+                  </div>
+                </template>
+                
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px;">
+                  <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">2. Paste Answer Code from your peer:</label>
+                  <textarea class="input" style="height: 80px; font-family: monospace; font-size: 0.75rem;" placeholder="Paste Answer Code here..." x-model="webrtcAnswerCodeInput"></textarea>
+                  <button class="btn" @click="completeConnection()" :disabled="!webrtcAnswerCodeInput">Connect Peer</button>
+                </div>
+              </div>
+            </template>
+            
+            <template x-if="webrtcRole === 'receive'">
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">1. Paste Offer Code from peer:</label>
+                  <textarea class="input" style="height: 80px; font-family: monospace; font-size: 0.75rem;" placeholder="Paste Offer Code here..." x-model="webrtcOfferCodeInput"></textarea>
+                  <button class="btn" @click="generateAnswer()" :disabled="!webrtcOfferCodeInput">2. Generate Answer Connection Code</button>
+                </div>
+                
+                <template x-if="webrtcAnswerCode">
+                  <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Share this Answer Code with your peer to open the link:</label>
+                    <textarea class="input" style="height: 100px; font-family: monospace; font-size: 0.75rem;" readonly x-text="webrtcAnswerCode" onclick="this.select()"></textarea>
+                    <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 4px;" @click="navigator.clipboard.writeText(webrtcAnswerCode); alert('Answer Code copied to clipboard!')">Copy Answer Code</button>
+                  </div>
+                </template>
+              </div>
+            </template>
+            
+            <div style="display: flex; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 8px;">
+              <button class="btn btn-secondary" @click="showWebRtcModal = false">Close</button>
+            </div>
           </div>
         </div>
       </div>
