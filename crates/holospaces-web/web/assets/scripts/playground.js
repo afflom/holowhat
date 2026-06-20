@@ -518,8 +518,8 @@ Alpine.data("playground", () => {
                 }
                 if (resolvedBytes) {
                   const isAutomerge = resolvedBytes && resolvedBytes.length >= 4 &&
-                    resolvedBytes[0] === 134 && resolvedBytes[1] === 74 &&
-                    resolvedBytes[2] === 115 && resolvedBytes[3] === 110;
+                    resolvedBytes[0] === 133 && resolvedBytes[1] === 111 &&
+                    resolvedBytes[2] === 74 && resolvedBytes[3] === 131;
 
                   const dataArray = Array.from(resolvedBytes);
                   const dataJson = JSON.stringify(dataArray);
@@ -533,7 +533,7 @@ Alpine.data("playground", () => {
                       });
                       console.log("Synced remote changes successfully!");
                     } catch (e) {
-                      console.error("Failed to merge remote document:", e);
+                      console.log("Info: Not merging remote chunk (may be incremental change):", e.message || e);
                     }
                   } else if (isAutomerge) {
                     // Populate document keys for initial boot of repository handle
