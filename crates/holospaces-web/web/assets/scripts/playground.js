@@ -613,6 +613,20 @@ async function loadPackagesAndBlocks(doc) {
 
 async function loadDocument() {
   try {
+    let attempt = 0;
+    while (
+      !localStorage.getItem("hs-doc-kappa:document/" + docUrl) &&
+      !localStorage.getItem("hs-doc-data:document/" + docUrl) &&
+      !localStorage.getItem("hs-doc-kappa:" + docUrl) &&
+      !localStorage.getItem("hs-doc-data:" + docUrl)
+    ) {
+      if (attempt % 10 === 0) {
+        console.log("Waiting for document " + docUrl + " to be populated via sync...");
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
+      attempt++;
+    }
+
     handle = await findWithBackoff(docUrl);
     handle.change(doc => {
       if (!doc.world) {
