@@ -682,6 +682,22 @@
         epochKey = col.epochKeys.get(epochId) || null;
       }
 
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Like",
+        "object": msg.id,
+        "content": symbol
+      };
+
+      // Runtime W3C Standards Conformance Check
+      try {
+        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
+        StandardsValidator.validateActivityStreams(payload, "Like");
+      } catch (err) {
+        console.error("Standards Conformance Error on Reaction event:", err.message);
+        return;
+      }
+
       const ev = await Event.create({
         kind: "reaction",
         author: p.id,
@@ -689,22 +705,8 @@
         parents,
         clock: maxClock + 1,
         epochId,
-        payload: {
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "type": "Like",
-          "object": msg.id,
-          "content": symbol
-        }
+        payload
       }, p, epochKey);
-
-      // Runtime W3C Standards Conformance Check
-      try {
-        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
-        StandardsValidator.validateActivityStreams(ev.body.payload || ev.body.cleartext, "Like");
-      } catch (err) {
-        console.error("Standards Conformance Error on Reaction event:", err.message);
-        return;
-      }
 
       const added = await col.addEvent(ev);
       if (added) {
@@ -741,6 +743,25 @@
         epochKey = col.epochKeys.get(epochId) || null;
       }
 
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Update",
+        "object": {
+          "type": "Note",
+          "id": this.editing.id,
+          "content": this.editText
+        }
+      };
+
+      // Runtime W3C Standards Conformance Check
+      try {
+        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
+        StandardsValidator.validateActivityStreams(payload, "Update");
+      } catch (err) {
+        console.error("Standards Conformance Error on Edit event:", err.message);
+        return;
+      }
+
       const ev = await Event.create({
         kind: "edit",
         author: p.id,
@@ -748,25 +769,8 @@
         parents,
         clock: maxClock + 1,
         epochId,
-        payload: {
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "type": "Update",
-          "object": {
-            "type": "Note",
-            "id": this.editing.id,
-            "content": this.editText
-          }
-        }
+        payload
       }, p, epochKey);
-
-      // Runtime W3C Standards Conformance Check
-      try {
-        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
-        StandardsValidator.validateActivityStreams(ev.body.payload || ev.body.cleartext, "Update");
-      } catch (err) {
-        console.error("Standards Conformance Error on Edit event:", err.message);
-        return;
-      }
 
       const added = await col.addEvent(ev);
       if (added) {
@@ -799,6 +803,24 @@
         epochKey = col.epochKeys.get(epochId) || null;
       }
 
+      const payload = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Delete",
+        "object": {
+          "type": "Tombstone",
+          "id": msg.id
+        }
+      };
+
+      // Runtime W3C Standards Conformance Check
+      try {
+        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
+        StandardsValidator.validateActivityStreams(payload, "Delete");
+      } catch (err) {
+        console.error("Standards Conformance Error on Delete event:", err.message);
+        return;
+      }
+
       const ev = await Event.create({
         kind: "delete",
         author: p.id,
@@ -806,24 +828,8 @@
         parents,
         clock: maxClock + 1,
         epochId,
-        payload: {
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "type": "Delete",
-          "object": {
-            "type": "Tombstone",
-            "id": msg.id
-          }
-        }
+        payload
       }, p, epochKey);
-
-      // Runtime W3C Standards Conformance Check
-      try {
-        const { StandardsValidator } = await import(`${origin}${base}/assets/scripts/standards-validator.js`);
-        StandardsValidator.validateActivityStreams(ev.body.payload || ev.body.cleartext, "Delete");
-      } catch (err) {
-        console.error("Standards Conformance Error on Delete event:", err.message);
-        return;
-      }
 
       const added = await col.addEvent(ev);
       if (added) {
